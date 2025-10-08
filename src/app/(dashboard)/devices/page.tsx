@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Upload } from "lucide-react";
+import { IconUpload } from "@/components/ui/icons";
 import { DevicesDashboard } from "@/components/devices/device-dashboard";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
@@ -109,7 +109,7 @@ export default async function DevicesPage() {
         </div>
         <Button asChild>
           <Link href="/devices/import">
-            <Upload className="h-4 w-4 mr-2" />
+            <IconUpload className="h-4 w-4 mr-2" />
             Import CSV
           </Link>
         </Button>

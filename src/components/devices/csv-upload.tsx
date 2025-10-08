@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Upload, FileText, AlertCircle, CheckCircle2, X } from "lucide-react";
-import Papa from "papaparse";
+import { FileText, AlertCircle, CheckCircle2, X } from "lucide-react";
+import { IconUpload } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -76,36 +76,43 @@ export function CSVUpload({ onUploadComplete }: CSVUploadProps) {
     setStatus("parsing");
     setError(null);
 
-    Papa.parse<CSVRow>(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        if (results.errors.length > 0) {
-          setError(`CSV parsing errors: ${results.errors.map((e) => e.message).join(", ")}`);
-          setStatus("error");
-          return;
-        }
+    // Lazy-load papaparse only when parsing is requested
+    import("papaparse").then((module) => {
+      const PapaLib = module.default || module;
+      PapaLib.parse<CSVRow>(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results: { data: CSVRow[]; errors: Array<{ message: string }>; meta: { fields?: string[] } }) => {
+          if (results.errors.length > 0) {
+            setError(`CSV parsing errors: ${results.errors.map((e) => e.message).join(", ")}`);
+            setStatus("error");
+            return;
+          }
 
-        const headers = results.meta.fields || [];
-        if (!validateCSVHeaders(headers)) {
-          setError("CSV file is missing required columns. Please check the format.");
-          setStatus("error");
-          return;
-        }
+          const headers = results.meta.fields || [];
+          if (!validateCSVHeaders(headers)) {
+            setError("CSV file is missing required columns. Please check the format.");
+            setStatus("error");
+            return;
+          }
 
-        if (results.data.length === 0) {
-          setError("CSV file is empty.");
-          setStatus("error");
-          return;
-        }
+          if (results.data.length === 0) {
+            setError("CSV file is empty.");
+            setStatus("error");
+            return;
+          }
 
-        setParsedData(results.data);
-        setStatus("idle");
-      },
-      error: (error) => {
-        setError(`Failed to parse CSV: ${error.message}`);
-        setStatus("error");
-      },
+          setParsedData(results.data);
+          setStatus("idle");
+        },
+        error: (error: Error) => {
+          setError(`Failed to parse CSV: ${error.message}`);
+          setStatus("error");
+        },
+      });
+    }).catch((err) => {
+      setError(`Failed to load CSV parser: ${err instanceof Error ? err.message : String(err)}`);
+      setStatus("error");
     });
   }, []);
 
@@ -201,7 +208,7 @@ export function CSVUpload({ onUploadComplete }: CSVUploadProps) {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            <Upload className="mb-4 h-12 w-12 text-muted-foreground" />
+            <IconUpload className="mb-4 h-12 w-12 text-muted-foreground" />
             <p className="mb-2 text-sm font-medium">Drag and drop your CSV file here</p>
             <p className="mb-4 text-xs text-muted-foreground">or</p>
             <label htmlFor="file-upload">

@@ -1,7 +1,7 @@
 ﻿import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CreateOrderButton } from "@/components/orders/create-order-button";
-import { TonerGaugeGroup } from "@/components/devices/toner-gauge-group";
+import TonerGaugeGroupClient from "@/components/devices/toner-gauge-group-client";
 import { WasteTonerBar } from "@/components/ui/waste-toner-bar";
 import { HighlightBadge } from "@/components/ui/highlight-badge";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -110,7 +110,7 @@ export default async function DeviceDetailPage({ params }: DeviceDetailPageProps
       </header>
 
       <section className="grid gap-6 rounded-3xl bg-white p-6 shadow-sm lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <TonerGaugeGroup values={tonerValues} />
+  <TonerGaugeGroupClient values={tonerValues} />
         <div className="flex flex-col gap-4">
           <WasteTonerBar
             value={deviceRecord.waste_toner_percent}

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { IconArrowLeft } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
 import { AlertSettingsForm } from "@/components/devices/alert-settings-form";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -36,7 +36,7 @@ export default async function DeviceSettingsPage({ params }: PageProps) {
       <div className="flex items-center gap-4">
         <Button asChild variant="ghost" size="sm">
           <Link href={`/devices/${encodeURIComponent(serial)}`}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
+            <IconArrowLeft className="h-4 w-4 mr-2" />
             Back to Device
           </Link>
         </Button>
@@ -67,7 +67,7 @@ export default async function DeviceSettingsPage({ params }: PageProps) {
             <li>Set custom thresholds for each toner color independently</li>
             <li>Default threshold is 15% for all colors</li>
             <li>Alerts appear when toner levels fall below the configured threshold</li>
-            <li>Settings are specific to this device and don't affect other devices</li>
+            <li>Settings are specific to this device and do not affect other devices</li>
           </ul>
         </div>
       </div>

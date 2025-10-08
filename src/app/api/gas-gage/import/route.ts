@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       const batch = transformedData.slice(i, i + batchSize);
       
       // Upsert the batch (update if exists, insert if not)
-      const { data: result, error } = await supabase
+      const { error } = await supabase
         .from("Gas_Gage")
         .upsert(batch, {
           onConflict: "device_id",

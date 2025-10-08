@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { IconArrowLeft } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
 import { CSVUpload } from "@/components/devices/csv-upload";
 
@@ -9,7 +9,7 @@ export default function ImportPage() {
       <div className="flex items-center gap-4">
         <Button asChild variant="ghost" size="sm">
           <Link href="/devices">
-            <ArrowLeft className="h-4 w-4 mr-2" />
+            <IconArrowLeft className="h-4 w-4 mr-2" />
             Back to Devices
           </Link>
         </Button>
@@ -52,8 +52,8 @@ export default function ImportPage() {
           <h3 className="font-semibold mb-2">How It Works</h3>
           <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1">
             <li>Upload your CSV file using the form above</li>
-            <li>Review the parsed data to ensure it's correct</li>
-            <li>Click "Upload to Database" to update the Gas Gage table</li>
+            <li>Review the parsed data to ensure it is correct</li>
+            <li>Click Upload to Database to update the Gas Gage table</li>
             <li>Existing devices will be updated, new devices will be added</li>
           </ol>
         </div>

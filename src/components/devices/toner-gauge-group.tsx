@@ -1,8 +1,21 @@
 ﻿"use client";
 
 import type { TonerKey } from "@/lib/database.types";
-import { TonerGauge } from "@/components/ui/toner-gauge";
+import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
+
+// Dynamically import the client-only TonerGauge (it depends on recharts)
+const TonerGauge = dynamic(
+  () => import("@/components/ui/toner-gauge").then((mod) => mod.TonerGauge),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-28 w-28 p-3 flex items-center justify-center">
+        <div className="h-14 w-14 rounded-full bg-muted/30 animate-pulse" />
+      </div>
+    ),
+  }
+);
 
 export type TonerGaugeGroupProps = {
   values: Partial<Record<TonerKey, number | null | undefined>>;

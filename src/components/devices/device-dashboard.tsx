@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Eye, FileText, Palette, Printer, Wrench, Settings } from "lucide-react";
+import { Eye, FileText, Palette, Printer, Settings } from "lucide-react";
 import type { DeviceRow, TonerKey } from "@/lib/database.types";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { cn, formatRelativeTime } from "@/lib/utils";
