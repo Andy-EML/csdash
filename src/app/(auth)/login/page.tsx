@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
+export const dynamic = 'force-dynamic';
+
 export default async function LoginPage() {
   const supabase = await getSupabaseServerClient();
   const {

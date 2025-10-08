@@ -3,6 +3,8 @@ import { ReactNode } from "react";
 import { TopNav } from "@/components/navigation/top-nav";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardLayout({
   children,
 }: {
