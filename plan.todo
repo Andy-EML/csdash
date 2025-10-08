@@ -1,0 +1,4 @@
+1. Build compact data-dense table layout with progress bars and controls. ?
+2. Add filters/density toggles, status grouping, and warning synthesis. ?
+3. Update UI primitives (toner bar, badges) to new inline format. ?
+4. Run lint/build. ?
