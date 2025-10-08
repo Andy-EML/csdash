@@ -3,7 +3,8 @@
     "allow": [
       "Bash(git add:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nOptimize performance and add Supabase setup guide\n\nPerformance improvements:\n- Remove force-dynamic from layouts and pages\n- Add 60-second caching with revalidation for device and order pages\n- Keep auth checks dynamic while caching data fetches\n\nNew documentation:\n- Add SUPABASE_SETUP.md with configuration instructions\n- Include SQL for database indexes to improve query performance\n- Document password reset redirect fix\n- Add RLS policy examples\n\nThis should significantly improve page load times by caching pages for 60 seconds instead of re-rendering on every request.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nWIP: Start dashboard redesign - add database types and toner bars\n\nDatabase changes:\n- Add toner_color field to orders table types\n- Add customer_site and customer_number to Gas_Gage types\n- Add ''archived'' status to order_status enum\n- Create TonerColor type for better type safety\n\nNew components:\n- Create TonerBarDisplay component with thick horizontal bars (10px height, 140px width)\n- Color-coded bars: Black, Cyan, Magenta, Yellow, Waste\n- Warning icons for low toner levels\n- Animated pulse for critical levels\n\nDocumentation:\n- Add database-migration-orders.sql with schema changes\n- Create REDESIGN_PLAN.md with full implementation roadmap\n\nNext steps: Integrate new bars into dashboard, update color scheme, add order modal\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []

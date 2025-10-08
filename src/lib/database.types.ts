@@ -1,5 +1,7 @@
 ﻿export type TonerKey = "c" | "m" | "y" | "k";
 
+export type TonerColor = "black" | "cyan" | "magenta" | "yellow" | "waste_toner" | "special_color";
+
 export type DeviceStatusLevel = "normal" | "warning" | "critical" | "unknown";
 
 export type Database = {
@@ -21,6 +23,8 @@ export type Database = {
           special_color: number | null;
           special_color_gage: string | null;
           customer: string | null;
+          customer_site: string | null;
+          customer_number: string | null;
           sales_office: string | null;
           service_office: string | null;
           latest_receive_date: string | null;
@@ -49,6 +53,8 @@ export type Database = {
           special_color?: number | null;
           special_color_gage?: string | null;
           customer?: string | null;
+          customer_site?: string | null;
+          customer_number?: string | null;
           sales_office?: string | null;
           service_office?: string | null;
           latest_receive_date?: string | null;
@@ -144,6 +150,7 @@ export type Database = {
           device_id: string;
           customer_name: string;
           order_type: Database["public"]["Enums"]["order_type"];
+          toner_color: string | null;
           status: Database["public"]["Enums"]["order_status"];
           created_at: string;
         };
@@ -152,6 +159,7 @@ export type Database = {
           device_id: string;
           customer_name: string;
           order_type: Database["public"]["Enums"]["order_type"];
+          toner_color?: string | null;
           status?: Database["public"]["Enums"]["order_status"];
           created_at?: string;
         };
@@ -215,7 +223,7 @@ export type Database = {
     };
     Enums: {
       order_type: "toner" | "waste_toner" | "service";
-      order_status: "open" | "in_progress" | "completed";
+      order_status: "open" | "in_progress" | "completed" | "archived";
     };
     CompositeTypes: {
       [_ in never]: never;
