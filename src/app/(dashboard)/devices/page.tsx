@@ -5,7 +5,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import type { OrderRow, DeviceRow, GasGageRow } from "@/lib/database.types";
 
-export const revalidate = 0;
+export const revalidate = 60; // Cache for 60 seconds
 
 // Transform Gas_Gage data to DeviceRow format for compatibility with existing dashboard
 function transformGasGageToDevice(gasGage: GasGageRow): DeviceRow {

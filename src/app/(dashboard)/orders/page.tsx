@@ -1,7 +1,7 @@
 import { OrdersTable } from "@/components/orders/orders-table";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
-export const revalidate = 0;
+export const revalidate = 60; // Cache for 60 seconds
 
 export default async function OrdersPage() {
   const supabase = await getSupabaseServerClient();
