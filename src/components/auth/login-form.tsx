@@ -46,12 +46,14 @@ export function LoginForm() {
         </label>
         <input
           id="email"
+          name="email"
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
+          onInput={(event) => setEmail((event.target as HTMLInputElement).value)}
           autoComplete="username"
           required
-          className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 relative z-10"
         />
       </div>
 
@@ -61,12 +63,14 @@ export function LoginForm() {
         </label>
         <input
           id="password"
+          name="password"
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
+          onInput={(event) => setPassword((event.target as HTMLInputElement).value)}
           autoComplete="current-password"
           required
-          className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 relative z-10"
         />
       </div>
 
