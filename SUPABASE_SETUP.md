@@ -8,8 +8,17 @@ In your Supabase Dashboard:
 1. Go to **Authentication** → **URL Configuration**
 2. Set **Site URL** to your production domain: `https://your-app.vercel.app`
 3. Add to **Redirect URLs**:
-   - `https://your-app.vercel.app/**`
-   - `http://localhost:3000/**` (for local development)
+   - `https://your-app.vercel.app/reset-password`
+   - `http://localhost:3000/reset-password` (for local development)
+
+**Important**: Replace `your-app.vercel.app` with your actual Vercel domain.
+
+The password reset flow:
+1. User clicks "Forgot Password" on login page
+2. User enters email on `/forgot-password`
+3. Supabase sends email with magic link
+4. Link redirects to `/reset-password` where user sets new password
+5. User is redirected to `/login` after success
 
 ### 2. Performance Optimization - Database Indexes
 

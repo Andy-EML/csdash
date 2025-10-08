@@ -87,6 +87,15 @@ export function LoginForm() {
       >
         {loading ? "Signing in..." : "Sign In"}
       </button>
+
+      <div className="text-center">
+        <a
+          href="/forgot-password"
+          className="text-sm text-blue-600 hover:text-blue-500 hover:underline"
+        >
+          Forgot your password?
+        </a>
+      </div>
     </form>
   );
 }
