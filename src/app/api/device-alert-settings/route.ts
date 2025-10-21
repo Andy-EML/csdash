@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { getSupabaseServiceClient } from "@/lib/supabase/service";
 
@@ -62,6 +63,20 @@ export async function POST(request: Request) {
 
     if (error) {
       throw error;
+    }
+
+    const { data: device } = await supabase
+      .from("Gas_Gage")
+      .select("serial_number")
+      .eq("device_id", deviceId)
+      .maybeSingle();
+
+    revalidatePath("/devices");
+
+    if (device?.serial_number) {
+      const encodedSerial = encodeURIComponent(device.serial_number.trim());
+      revalidatePath(`/devices/${encodedSerial}`);
+      revalidatePath(`/devices/${encodedSerial}/settings`);
     }
 
     return NextResponse.json({ success: true });

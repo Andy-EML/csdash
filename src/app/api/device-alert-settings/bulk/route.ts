@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { getSupabaseServiceClient } from "@/lib/supabase/service";
 
@@ -176,6 +177,22 @@ export async function POST(request: Request) {
           }
         }
       }
+    }
+
+    const serialsToRevalidate = new Set<string>();
+    for (const record of validRecords) {
+      if (record.serialNumber) {
+        serialsToRevalidate.add(record.serialNumber);
+      }
+    }
+
+    revalidatePath("/devices");
+    for (const serial of serialsToRevalidate) {
+      const trimmed = serial.trim();
+      if (!trimmed) continue;
+      const encodedSerial = encodeURIComponent(trimmed);
+      revalidatePath(`/devices/${encodedSerial}`);
+      revalidatePath(`/devices/${encodedSerial}/settings`);
     }
 
     return NextResponse.json({ success: true, skipped: skippedCount > 0 ? skippedCount : undefined });
