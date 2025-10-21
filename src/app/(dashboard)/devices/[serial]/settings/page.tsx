@@ -2,7 +2,7 @@ import Link from "next/link";
 import { IconArrowLeft } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
 import { AlertSettingsForm } from "@/components/devices/alert-settings-form";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseServiceClient } from "@/lib/supabase/service";
 import { notFound } from "next/navigation";
 
 type PageProps = {
@@ -11,7 +11,7 @@ type PageProps = {
 
 export default async function DeviceSettingsPage({ params }: PageProps) {
   const { serial } = await params;
-  const supabase = await getSupabaseServerClient();
+  const supabase = getSupabaseServiceClient();
 
   // Fetch device info from Gas_Gage table
   const { data: device, error: deviceError } = await supabase

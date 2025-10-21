@@ -1,5 +1,5 @@
 import { DevicesDashboard } from "@/components/devices/device-dashboard";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseServiceClient } from "@/lib/supabase/service";
 import type {
   DeviceAlertSettingsRow,
   DeviceWarningOverrideRow,
@@ -9,7 +9,7 @@ import type {
 export const revalidate = 60;
 
 export default async function DevicesPage() {
-  const supabase = await getSupabaseServerClient();
+  const supabase = getSupabaseServiceClient();
 
   const [
     { data: gasGageDevices, error: gasGageError },
@@ -39,7 +39,11 @@ export default async function DevicesPage() {
   }
 
   const activeDeviceIds = Array.from(
-    new Set((activeOrders ?? []).map((order) => order.device_id))
+    new Set(
+      (activeOrders ?? [])
+        .map((order) => (typeof order.device_id === "string" ? order.device_id.trim() : ""))
+        .filter((value) => value.length > 0)
+    )
   );
 
   return (
