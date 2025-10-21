@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import type { DeviceAlertSettingsRow } from "@/lib/database.types";
 
 const DEFAULT_THRESHOLD = 15;
@@ -41,6 +42,9 @@ export function AlertSettingsForm({
   const [yellowThreshold, setYellowThreshold] = useState(
     initialSettings?.yellow_threshold ?? DEFAULT_THRESHOLD
   );
+  const [automationEnabled, setAutomationEnabled] = useState(
+    initialSettings?.alerts_enabled ?? true
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{
     type: "success" | "error";
@@ -52,6 +56,7 @@ export function AlertSettingsForm({
     setCyanThreshold(DEFAULT_THRESHOLD);
     setMagentaThreshold(DEFAULT_THRESHOLD);
     setYellowThreshold(DEFAULT_THRESHOLD);
+    setAutomationEnabled(true);
     setMessage(null);
   };
 
@@ -71,6 +76,7 @@ export function AlertSettingsForm({
           cyan_threshold: cyanThreshold,
           magenta_threshold: magentaThreshold,
           yellow_threshold: yellowThreshold,
+          alerts_enabled: automationEnabled,
         }),
       });
 
@@ -109,6 +115,18 @@ export function AlertSettingsForm({
             device. Alerts will appear on the dashboard when toner levels fall below these
             thresholds.
           </p>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">Include in automation</p>
+            <p className="text-muted-foreground text-xs">Disable this to keep the device off automation lists and manage toner manually.</p>
+          </div>
+          <Switch
+            checked={automationEnabled}
+            onCheckedChange={(value) => setAutomationEnabled(Boolean(value))}
+            aria-label="Toggle automated toner management"
+          />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">

@@ -7,6 +7,7 @@ type ThresholdPayload = {
   cyan_threshold?: number | null;
   magenta_threshold?: number | null;
   yellow_threshold?: number | null;
+  alerts_enabled?: boolean | null;
 };
 
 function sanitizeThreshold(value: unknown, fallback: number): number {
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
     const cyan = sanitizeThreshold(payload.cyan_threshold, DEFAULT_THRESHOLD);
     const magenta = sanitizeThreshold(payload.magenta_threshold, DEFAULT_THRESHOLD);
     const yellow = sanitizeThreshold(payload.yellow_threshold, DEFAULT_THRESHOLD);
+    const alertsEnabled = payload.alerts_enabled ?? true;
 
     const supabase = getSupabaseServiceClient();
 
@@ -48,11 +50,11 @@ export async function POST(request: Request) {
         magenta_threshold: magenta,
         yellow_threshold: yellow,
         special_color_threshold: null,
-        alerts_enabled: true,
-        black_enabled: true,
-        cyan_enabled: true,
-        magenta_enabled: true,
-        yellow_enabled: true,
+        alerts_enabled: alertsEnabled,
+        black_enabled: alertsEnabled,
+        cyan_enabled: alertsEnabled,
+        magenta_enabled: alertsEnabled,
+        yellow_enabled: alertsEnabled,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "device_id" }

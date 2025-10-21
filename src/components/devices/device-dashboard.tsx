@@ -79,6 +79,8 @@ type EnrichedDevice = {
   canRestore: boolean;
   hasActiveOrder: boolean;
   needsAttention: boolean;
+  automationEnabled: boolean;
+  customerLabel: string;
 };
 
 type AttentionFilter = "needs_attention" | "active_orders" | "all";
@@ -119,6 +121,14 @@ const ORDER_SCOPE_LABEL: Record<SupplyScope, string> = {
   magenta: "Magenta toner",
   yellow: "Yellow toner",
   waste: "Waste toner",
+};
+
+const getCustomerLabel = (value: string | null | undefined): string => {
+  if (!value) {
+    return "Unassigned";
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : "Unassigned";
 };
 
 const ATTENTION_FILTER_OPTIONS: Array<{
@@ -188,6 +198,11 @@ export function DevicesDashboard({
   const [bulkOrderLoading, setBulkOrderLoading] = useState(false);
   const [attentionFilter, setAttentionFilter] =
     useState<AttentionFilter>("needs_attention");
+  const [customerFilter, setCustomerFilter] = useState<string>("all");
+  const [automationFilter, setAutomationFilter] =
+    useState<"auto" | "manual" | "all">("auto");
+  const [automationAction, setAutomationAction] =
+    useState<"leave" | "enable" | "disable">("leave");
 
   const activeColumns = selectionMode ? 1 : columns;
 
@@ -230,11 +245,13 @@ export function DevicesDashboard({
       if (next) {
         setBulkThresholds({ ...DEFAULT_THRESHOLD_MAP });
         setBulkOrderScope("black");
+        setAutomationAction("leave");
       } else {
         setSelectedDevices({});
         setWarningAction("none");
         setBulkThresholds({ ...DEFAULT_THRESHOLD_MAP });
         setBulkOrderScope("black");
+        setAutomationAction("leave");
       }
       return next;
     });
@@ -272,6 +289,7 @@ export function DevicesDashboard({
     setWarningAction("none");
     setBulkThresholds({ ...DEFAULT_THRESHOLD_MAP });
     setBulkOrderScope("black");
+    setAutomationAction("leave");
   }, []);
 
   const applyBulkChanges = useCallback(async () => {
@@ -320,6 +338,7 @@ export function DevicesDashboard({
         serialNumbers: string[];
         thresholds: ThresholdMap;
         warningAction?: "none" | "mute" | "unmute";
+        automationAction?: "leave" | "enable" | "disable";
       } = {
         deviceIds,
         serialNumbers,
@@ -329,6 +348,8 @@ export function DevicesDashboard({
       if (warningAction !== "none") {
         body.warningAction = warningAction;
       }
+
+      body.automationAction = automationAction;
 
       const response = await fetch("/api/device-alert-settings/bulk", {
         method: "POST",
@@ -361,12 +382,15 @@ export function DevicesDashboard({
         });
       }
 
+      if (appliedCount > 0) {
+        router.refresh();
+      }
+
       if (skippedCount === 0) {
         setSelectedDevices({});
         setWarningAction("none");
         setBulkThresholds({ ...DEFAULT_THRESHOLD_MAP });
         setSelectionMode(false);
-        router.refresh();
       } else {
         setBulkThresholds({ ...DEFAULT_THRESHOLD_MAP });
       }
@@ -382,8 +406,9 @@ export function DevicesDashboard({
       });
     } finally {
       setBulkLoading(false);
+      setAutomationAction("leave");
     }
-  }, [selectedDevices, bulkThresholds, warningAction, router, toast]);
+  }, [selectedDevices, bulkThresholds, warningAction, automationAction, router, toast]);
 
   const settingsByDevice = useMemo(() => {
     const map = new Map<string, DeviceAlertSettingsRow>();
@@ -650,6 +675,8 @@ export function DevicesDashboard({
       const { label, accentClass, badgeClass } = STATUS_META[status];
       const visualMeta: DeviceStatusMeta = { label, accentClass, badgeClass };
       const lastUpdatedIso = getDeviceLastUpdatedIso(device);
+      const customerLabel = getCustomerLabel(device.customer);
+      const automationEnabled = settings?.alerts_enabled !== false;
       const hasActiveOrder = combinedOrders.size > 0;
       const needsAttention =
         status !== "ok" &&
@@ -679,12 +706,47 @@ export function DevicesDashboard({
         canRestore: mutedScopes.includes("all") && device.serial_number !== null,
         hasActiveOrder,
         needsAttention,
+        automationEnabled,
+        customerLabel,
       };
     });
   }, [devices, overridesBySerial, settingsByDevice, renderedAt, ordersByDevice]);
 
+  const customerOptions = useMemo(() => {
+    const set = new Set<string>();
+    enrichedDevices.forEach((entry) => set.add(entry.customerLabel));
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [enrichedDevices]);
+
+  useEffect(() => {
+    if (customerFilter !== "all" && !customerOptions.includes(customerFilter)) {
+      setCustomerFilter("all");
+    }
+  }, [customerFilter, customerOptions]);
+
+  const automationFilteredDevices = useMemo(() => {
+    return enrichedDevices.filter((entry) => {
+      if (automationFilter === "auto") {
+        return entry.automationEnabled;
+      }
+      if (automationFilter === "manual") {
+        return !entry.automationEnabled;
+      }
+      return true;
+    });
+  }, [enrichedDevices, automationFilter]);
+
+  const customerFilteredDevices = useMemo(() => {
+    return automationFilteredDevices.filter((entry) => {
+      if (customerFilter !== "all" && entry.customerLabel !== customerFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [automationFilteredDevices, customerFilter]);
+
   const counts = useMemo(() => {
-    return enrichedDevices.reduce(
+    return customerFilteredDevices.reduce(
       (acc, entry) => {
         acc.total += 1;
         acc[entry.status] += 1;
@@ -692,11 +754,11 @@ export function DevicesDashboard({
       },
       { total: 0, critical: 0, warning: 0, ok: 0 }
     );
-  }, [enrichedDevices]);
+  }, [customerFilteredDevices]);
 
   const attentionCounts = useMemo(
     () =>
-      enrichedDevices.reduce(
+      customerFilteredDevices.reduce(
         (acc, entry) => {
           if (entry.needsAttention) {
             acc.needsAttention += 1;
@@ -708,13 +770,61 @@ export function DevicesDashboard({
         },
         { needsAttention: 0, activeOrders: 0 }
       ),
-    [enrichedDevices]
+    [customerFilteredDevices]
   );
 
+  const totalVisible = customerFilteredDevices.length;
+
+
+  const hiddenManualCount = useMemo(() => {
+    if (automationFilter !== "auto") {
+      return 0;
+    }
+    const term = deferredSearchQuery.trim().toLowerCase();
+
+    return enrichedDevices.filter((entry) => {
+      if (entry.automationEnabled) {
+        return false;
+      }
+      if (attentionFilter === "needs_attention" && !entry.needsAttention) {
+        return false;
+      }
+      if (attentionFilter === "active_orders" && !entry.hasActiveOrder) {
+        return false;
+      }
+      if (statusFilter !== "all" && entry.status !== statusFilter) {
+        return false;
+      }
+      if (customerFilter !== "all" && entry.customerLabel !== customerFilter) {
+        return false;
+      }
+      if (!term) {
+        return true;
+      }
+      const haystack = [
+        entry.customerLabel,
+        entry.device.model ?? "",
+        entry.device.serial_number ?? "",
+        entry.device.device_id ?? "",
+        entry.device.device_location ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(term);
+    }).length;
+  }, [
+    automationFilter,
+    enrichedDevices,
+    attentionFilter,
+    statusFilter,
+    customerFilter,
+    deferredSearchQuery,
+  ]);
   const filteredDevices = useMemo(() => {
     const term = deferredSearchQuery.trim().toLowerCase();
 
-    return enrichedDevices
+    return customerFilteredDevices
       .filter((entry) => {
         if (attentionFilter === "needs_attention" && !entry.needsAttention) {
           return false;
@@ -725,13 +835,16 @@ export function DevicesDashboard({
         if (statusFilter !== "all" && entry.status !== statusFilter) {
           return false;
         }
+        if (customerFilter !== "all" && entry.customerLabel !== customerFilter) {
+          return false;
+        }
 
         if (!term) {
           return true;
         }
 
         const haystack = [
-          entry.device.customer ?? "",
+          entry.customerLabel,
           entry.device.model ?? "",
           entry.device.serial_number ?? "",
           entry.device.device_id ?? "",
@@ -746,11 +859,17 @@ export function DevicesDashboard({
         const byStatus = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
         if (byStatus !== 0) return byStatus;
 
-        const nameA = a.device.customer ?? "";
-        const nameB = b.device.customer ?? "";
+        const nameA = a.customerLabel;
+        const nameB = b.customerLabel;
         return nameA.localeCompare(nameB);
       });
-  }, [enrichedDevices, deferredSearchQuery, statusFilter, attentionFilter]);
+  }, [
+    customerFilteredDevices,
+    deferredSearchQuery,
+    statusFilter,
+    attentionFilter,
+    customerFilter,
+  ]);
 
   const filterLabel =
     statusFilter === "all" ? "All devices" : STATUS_META[statusFilter].label;
@@ -1033,6 +1152,31 @@ export function DevicesDashboard({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              <select
+                value={customerFilter}
+                onChange={(event) => setCustomerFilter(event.target.value)}
+                className="h-11 min-w-[180px] rounded-xl border border-border bg-background px-4 text-sm text-foreground shadow-sm transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:bg-background/80"
+                aria-label="Filter by customer"
+              >
+                <option value="all">All customers</option>
+                {customerOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={automationFilter}
+                onChange={(event) =>
+                  setAutomationFilter(event.target.value as "auto" | "all" | "manual")
+                }
+                className="h-11 min-w-[200px] rounded-xl border border-border bg-background px-4 text-sm text-foreground shadow-sm transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:bg-background/80"
+                aria-label="Automation filter"
+              >
+                <option value="auto">Auto-managed only</option>
+                <option value="all">All devices</option>
+                <option value="manual">Manual orders only</option>
+              </select>
               <Button
                 variant={selectionMode ? "secondary" : "outline"}
                 className="h-11 rounded-xl"
@@ -1041,8 +1185,14 @@ export function DevicesDashboard({
                 {selectionMode ? "Close bulk actions" : "Bulk actions"}
               </Button>
               <Badge variant="outline" className="w-fit rounded-full px-4 py-1">
-                Showing {filteredDevices.length} of {counts.total} devices
+                Showing {filteredDevices.length} of {totalVisible} devices
               </Badge>
+              {hiddenManualCount > 0 ? (
+                <Badge variant="secondary" className="w-fit rounded-full px-4 py-1 text-xs">
+                  Hiding {hiddenManualCount} manual-order device
+                  {hiddenManualCount === 1 ? "" : "s"}
+                </Badge>
+              ) : null}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1118,6 +1268,25 @@ export function DevicesDashboard({
                       <option value="mute">Mute warnings</option>
                       <option value="unmute">Enable warnings</option>
                     </select>
+                  </label>
+                  <label className="flex flex-col text-xs font-medium uppercase text-muted-foreground lg:w-full">
+                    Automation mode
+                    <select
+                      value={automationAction}
+                      onChange={(event) =>
+                        setAutomationAction(
+                          event.target.value as "leave" | "enable" | "disable"
+                        )
+                      }
+                      className="mt-1 h-10 rounded-lg border border-border bg-card px-3 text-sm"
+                    >
+                      <option value="leave">Keep existing behaviour</option>
+                      <option value="enable">Enable auto-managed alerts</option>
+                      <option value="disable">Manual orders only (hide from main view)</option>
+                    </select>
+                    <span className="mt-1 text-[11px] normal-case text-muted-foreground">
+                      Manual devices are excluded from the dashboard when the automation filter is set to auto-managed.
+                    </span>
                   </label>
                   <Button
                     onClick={applyBulkChanges}
@@ -1214,6 +1383,7 @@ export function DevicesDashboard({
                     <th className="px-4 py-3 text-left">Customer</th>
                     <th className="px-4 py-3 text-left">Model</th>
                     <th className="px-4 py-3 text-left">Location</th>
+                    <th className="px-4 py-3 text-left">Automation</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -1256,13 +1426,16 @@ export function DevicesDashboard({
                           {serial || "Unknown"}
                         </td>
                         <td className="px-4 py-3">
-                          {entry.device.customer ?? "Unassigned"}
+                          {entry.customerLabel}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
                           {entry.device.model ?? "Unknown model"}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
                           {entry.device.device_location ?? "Unknown location"}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {entry.automationEnabled ? "Auto-managed" : "Manual only"}
                         </td>
                         <td className="px-4 py-3 text-right">
                           {serial ? (
