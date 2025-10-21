@@ -49,19 +49,20 @@ export async function POST(request: Request) {
 
       gasDevices?.forEach((record) => {
         if (record.serial_number && record.device_id) {
-          serialToDeviceId.set(record.serial_number, record.device_id);
+          serialToDeviceId.set(record.serial_number.trim(), record.device_id);
         }
       });
     }
 
     const resolvedRecords = deviceIds.map((rawId, index) => {
-      const serial = serialNumbers[index] ?? "";
+      const rawSerial = serialNumbers[index] ?? "";
+      const trimmedSerial = typeof rawSerial === "string" ? rawSerial.trim() : "";
       const trimmedId = typeof rawId === "string" ? rawId.trim() : "";
-      const lookupId = serial ? serialToDeviceId.get(serial) ?? "" : "";
+      const lookupId = trimmedSerial ? serialToDeviceId.get(trimmedSerial) ?? "" : "";
       const resolvedId = lookupId || trimmedId;
       return {
         deviceId: resolvedId.length > 0 ? resolvedId : null,
-        serialNumber: serial,
+        serialNumber: trimmedSerial,
       };
     });
 

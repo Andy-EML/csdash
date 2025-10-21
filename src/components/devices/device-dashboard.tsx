@@ -266,17 +266,20 @@ export function DevicesDashboard({
 
   const handleToggleDeviceSelection = useCallback(
     (device: GasGageRow, nextSelected: boolean) => {
-      if (!device.serial_number) {
+      const serial = typeof device.serial_number === "string" ? device.serial_number.trim() : "";
+      if (!serial) {
         return;
       }
+      const normalizedDeviceId =
+        typeof device.device_id === "string" ? device.device_id.trim() : "";
       setSelectedDevices((previous) => {
         const next = { ...previous };
         if (nextSelected) {
-          next[device.serial_number] = {
-            deviceId: device.device_id ?? device.serial_number,
+          next[serial] = {
+            deviceId: normalizedDeviceId || serial,
           };
         } else {
-          delete next[device.serial_number];
+          delete next[serial];
         }
         return next;
       });
@@ -413,8 +416,9 @@ export function DevicesDashboard({
   const settingsByDevice = useMemo(() => {
     const map = new Map<string, DeviceAlertSettingsRow>();
     for (const setting of alertSettings) {
-      if (setting.device_id) {
-        map.set(setting.device_id, setting);
+      const key = typeof setting.device_id === "string" ? setting.device_id.trim() : "";
+      if (key) {
+        map.set(key, setting);
       }
     }
     return map;
@@ -423,7 +427,11 @@ export function DevicesDashboard({
   const overridesBySerial = useMemo(() => {
     const map = new Map<string, DeviceWarningOverrideRow[]>();
     for (const override of warningOverrides) {
-      const key = override.serial_number;
+      const key =
+        typeof override.serial_number === "string" ? override.serial_number.trim() : "";
+      if (!key) {
+        continue;
+      }
       const list = map.get(key) ?? [];
       list.push(override);
       map.set(key, list);
@@ -431,10 +439,13 @@ export function DevicesDashboard({
     return map;
   }, [warningOverrides]);
 
-  const activeOrderSet = useMemo(
-    () => new Set(activeOrderDeviceIds.filter(Boolean)),
-    [activeOrderDeviceIds]
-  );
+  const activeOrderSet = useMemo(() => {
+    return new Set(
+      activeOrderDeviceIds
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter((value) => value.length > 0)
+    );
+  }, [activeOrderDeviceIds]);
 
   // Map orders by device and toner color
   const ordersByDevice = useMemo(() => {
@@ -656,16 +667,18 @@ export function DevicesDashboard({
 
   const enrichedDevices = useMemo<EnrichedDevice[]>(() => {
     return devices.map((device) => {
-      const settings = device.device_id ? settingsByDevice.get(device.device_id) : undefined;
-      const deviceOverrides = overridesBySerial.get(device.serial_number ?? "") ?? [];
+      const deviceId = typeof device.device_id === "string" ? device.device_id.trim() : "";
+      const serial = typeof device.serial_number === "string" ? device.serial_number.trim() : "";
+      const settings = deviceId ? settingsByDevice.get(deviceId) : undefined;
+      const deviceOverrides = overridesBySerial.get(serial) ?? [];
       const mutedScopes = computeMutedScopes(device, deviceOverrides);
       const combinedOrders = new Set<string>();
-      if (device.serial_number) {
-        const bySerial = ordersByDevice.get(device.serial_number);
+      if (serial) {
+        const bySerial = ordersByDevice.get(serial);
         bySerial?.forEach((value) => combinedOrders.add(value));
       }
-      if (device.device_id) {
-        const byId = ordersByDevice.get(device.device_id);
+      if (deviceId) {
+        const byId = ordersByDevice.get(deviceId);
         byId?.forEach((value) => combinedOrders.add(value));
       }
 
@@ -699,11 +712,8 @@ export function DevicesDashboard({
         statusMeta: visualMeta,
         lastUpdatedLabel: formatRelativeTime(lastUpdatedIso, renderedAt),
         mutedScopes,
-        canDismiss:
-          status !== "ok" &&
-          !mutedScopes.includes("all") &&
-          device.serial_number !== null,
-        canRestore: mutedScopes.includes("all") && device.serial_number !== null,
+        canDismiss: status !== "ok" && !mutedScopes.includes("all") && serial !== "",
+        canRestore: mutedScopes.includes("all") && serial !== "",
         hasActiveOrder,
         needsAttention,
         automationEnabled,
@@ -1389,9 +1399,13 @@ export function DevicesDashboard({
                 </thead>
                 <tbody className="divide-y divide-border/60">
                   {filteredDevices.map((entry, index) => {
-                    const serial = entry.device.serial_number ?? "";
-                    const rowKey = serial || entry.device.device_id || String(index);
-                    const selectionDisabled = !serial || !entry.device.device_id;
+                    const serial = (entry.device.serial_number ?? "").trim();
+                    const normalizedDeviceId =
+                      typeof entry.device.device_id === "string"
+                        ? entry.device.device_id.trim()
+                        : "";
+                    const rowKey = serial || normalizedDeviceId || String(index);
+                    const selectionDisabled = !serial || !normalizedDeviceId;
                     const isSelected = Boolean(serial && selectedDevices[serial]);
 
                     const handleRowToggle = () => {
@@ -1477,16 +1491,23 @@ export function DevicesDashboard({
                       break;
                     }
 
-                    const serial = entry.device.serial_number ?? "";
+                    const serial = (entry.device.serial_number ?? "").trim();
+                    const normalizedDeviceId =
+                      typeof entry.device.device_id === "string"
+                        ? entry.device.device_id.trim()
+                        : "";
                     const cardKey =
-                      serial || entry.device.device_id || `${rowStart + offset}`;
+                      serial || normalizedDeviceId || `${rowStart + offset}`;
                     const dismissing = pendingDismiss === serial;
                     const ordering = pendingOrder?.startsWith(`${serial}-`) ?? false;
                     const deviceTarget =
-                      entry.device.serial_number ?? entry.device.device_id ?? null;
+                      entry.device.serial_number ?? normalizedDeviceId ?? null;
                     const isSelected =
                       selectionMode && !!serial && Boolean(selectedDevices[serial]);
-                    const selectionDisabled = !serial;
+                    const selectionDisabled = !serial || !normalizedDeviceId;
+                    const hasActiveOrderForCard =
+                      (normalizedDeviceId ? activeOrderSet.has(normalizedDeviceId) : false) ||
+                      (serial ? activeOrderSet.has(serial) : false);
                     const toggleSelection =
                       selectionMode && !selectionDisabled
                         ? (nextSelected: boolean) =>
@@ -1503,7 +1524,7 @@ export function DevicesDashboard({
                         location={entry.device.device_location}
                         tonerLevels={entry.tonerLevels}
                         lastUpdatedLabel={entry.lastUpdatedLabel}
-                        hasActiveOrder={!!serial && activeOrderSet.has(serial)}
+                        hasActiveOrder={Boolean(hasActiveOrderForCard)}
                         statusMeta={entry.statusMeta}
                         mutedScopes={entry.mutedScopes}
                         dismissLoading={dismissing}
@@ -1574,20 +1595,27 @@ export function DevicesDashboard({
               )}
             >
               {filteredDevices.map((entry, index) => {
-                const serial = entry.device.serial_number ?? "";
-                const cardKey = serial || entry.device.device_id || String(index);
+                const serial = (entry.device.serial_number ?? "").trim();
+                const normalizedDeviceId =
+                  typeof entry.device.device_id === "string"
+                    ? entry.device.device_id.trim()
+                    : "";
+                const cardKey = serial || normalizedDeviceId || String(index);
                 const dismissing = pendingDismiss === serial;
                 const ordering = pendingOrder?.startsWith(`${serial}-`) ?? false;
                 const deviceTarget =
-                  entry.device.serial_number ?? entry.device.device_id ?? null;
+                  entry.device.serial_number ?? normalizedDeviceId ?? null;
                 const isSelected =
                   selectionMode && !!serial && Boolean(selectedDevices[serial]);
-                const selectionDisabled = !serial;
+                const selectionDisabled = !serial || !normalizedDeviceId;
                 const toggleSelection =
                   selectionMode && !selectionDisabled
                     ? (nextSelected: boolean) =>
                         handleToggleDeviceSelection(entry.device, nextSelected)
                     : undefined;
+                const hasActiveOrderForCard =
+                  (normalizedDeviceId ? activeOrderSet.has(normalizedDeviceId) : false) ||
+                  (serial ? activeOrderSet.has(serial) : false);
 
                 return (
                   <DeviceCard
@@ -1599,7 +1627,7 @@ export function DevicesDashboard({
                     location={entry.device.device_location}
                     tonerLevels={entry.tonerLevels}
                     lastUpdatedLabel={entry.lastUpdatedLabel}
-                    hasActiveOrder={!!serial && activeOrderSet.has(serial)}
+                    hasActiveOrder={Boolean(hasActiveOrderForCard)}
                     statusMeta={entry.statusMeta}
                     mutedScopes={entry.mutedScopes}
                     dismissLoading={dismissing}

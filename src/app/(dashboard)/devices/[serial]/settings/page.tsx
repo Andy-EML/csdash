@@ -25,10 +25,12 @@ export default async function DeviceSettingsPage({ params }: PageProps) {
   }
 
   // Fetch existing alert settings
+  const normalizedDeviceId = (device.device_id ?? "").trim();
+
   const { data: settings } = await supabase
     .from("device_alert_settings")
     .select("*")
-    .eq("device_id", device.device_id)
+    .eq("device_id", normalizedDeviceId)
     .single();
 
   return (
@@ -51,7 +53,7 @@ export default async function DeviceSettingsPage({ params }: PageProps) {
 
       <div className="max-w-4xl">
         <AlertSettingsForm
-          deviceId={device.device_id}
+          deviceId={normalizedDeviceId}
           deviceName={device.customer || undefined}
           initialSettings={settings}
         />
