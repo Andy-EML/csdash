@@ -36,7 +36,7 @@ export default async function DeviceSettingsPage({ params }: PageProps) {
       <div className="flex items-center gap-4">
         <Button asChild variant="ghost" size="sm">
           <Link href={`/devices/${encodeURIComponent(serial)}`}>
-            <IconArrowLeft className="h-4 w-4 mr-2" />
+            <IconArrowLeft className="mr-2 h-4 w-4" />
             Back to Device
           </Link>
         </Button>
@@ -44,7 +44,7 @@ export default async function DeviceSettingsPage({ params }: PageProps) {
 
       <div>
         <h1 className="text-2xl font-bold">{device.customer || "Device Settings"}</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           {device.model} • Serial: {device.serial_number}
         </p>
       </div>
@@ -58,12 +58,13 @@ export default async function DeviceSettingsPage({ params }: PageProps) {
       </div>
 
       <div className="max-w-4xl">
-        <div className="rounded-lg border bg-muted/50 p-4">
-          <h3 className="font-semibold mb-2">About Alert Thresholds</h3>
-          <p className="text-sm text-muted-foreground mb-2">
-            Alert thresholds determine when warnings appear on the dashboard for low toner levels.
+        <div className="bg-muted/50 rounded-lg border p-4">
+          <h3 className="mb-2 font-semibold">About Alert Thresholds</h3>
+          <p className="text-muted-foreground mb-2 text-sm">
+            Alert thresholds determine when warnings appear on the dashboard for low toner
+            levels.
           </p>
-          <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+          <ul className="text-muted-foreground list-inside list-disc space-y-1 text-sm">
             <li>Set custom thresholds for each toner color independently</li>
             <li>Default threshold is 15% for all colors</li>
             <li>Alerts appear when toner levels fall below the configured threshold</li>

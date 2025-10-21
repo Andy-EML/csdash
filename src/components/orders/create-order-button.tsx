@@ -24,8 +24,9 @@ export type CreateOrderButtonProps = {
 export function CreateOrderButton({ deviceId, customerName }: CreateOrderButtonProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [orderType, setOrderType] = useState<typeof ORDER_TYPES[number]["value"]>("toner");
-  const [status, setStatus] = useState<typeof ORDER_STATUSES[number]["value"]>("open");
+  const [orderType, setOrderType] =
+    useState<(typeof ORDER_TYPES)[number]["value"]>("toner");
+  const [status, setStatus] = useState<(typeof ORDER_STATUSES)[number]["value"]>("open");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -82,13 +83,13 @@ export function CreateOrderButton({ deviceId, customerName }: CreateOrderButtonP
       </button>
 
       {isOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4 py-10">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-10 backdrop-blur-sm dark:bg-black/60">
+          <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card p-6 shadow-2xl dark:bg-card/90">
             <div className="mb-4 flex items-start justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-neutral-900">New order</h2>
-                <p className="text-sm text-neutral-500">
-                  {customerName} — SN {deviceId}
+                <h2 className="text-lg font-semibold text-foreground">New order</h2>
+                <p className="text-sm text-muted-foreground">
+                  {customerName} - SN {deviceId}
                 </p>
               </div>
               <button
@@ -97,7 +98,7 @@ export function CreateOrderButton({ deviceId, customerName }: CreateOrderButtonP
                   setIsOpen(false);
                   resetForm();
                 }}
-                className="rounded-full border border-transparent px-3 py-1 text-sm text-neutral-500 hover:border-neutral-200 hover:text-neutral-900"
+                className="rounded-full border border-transparent px-3 py-1 text-sm text-muted-foreground transition hover:border-border hover:text-foreground"
               >
                 Close
               </button>
@@ -105,11 +106,15 @@ export function CreateOrderButton({ deviceId, customerName }: CreateOrderButtonP
 
             <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
               <label className="flex flex-col gap-2 text-sm">
-                <span className="font-medium text-neutral-700">Order type</span>
+                <span className="font-medium text-foreground">Order type</span>
                 <select
                   value={orderType}
-                  onChange={(event) => setOrderType(event.target.value as typeof ORDER_TYPES[number]["value"])}
-                  className="rounded-md border border-neutral-300 bg-white px-3 py-2"
+                  onChange={(event) =>
+                    setOrderType(
+                      event.target.value as (typeof ORDER_TYPES)[number]["value"]
+                    )
+                  }
+                  className="rounded-md border border-border bg-background px-3 py-2 text-foreground shadow-sm dark:bg-background/80"
                 >
                   {ORDER_TYPES.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -120,11 +125,15 @@ export function CreateOrderButton({ deviceId, customerName }: CreateOrderButtonP
               </label>
 
               <label className="flex flex-col gap-2 text-sm">
-                <span className="font-medium text-neutral-700">Status</span>
+                <span className="font-medium text-foreground">Status</span>
                 <select
                   value={status}
-                  onChange={(event) => setStatus(event.target.value as typeof ORDER_STATUSES[number]["value"])}
-                  className="rounded-md border border-neutral-300 bg-white px-3 py-2"
+                  onChange={(event) =>
+                    setStatus(
+                      event.target.value as (typeof ORDER_STATUSES)[number]["value"]
+                    )
+                  }
+                  className="rounded-md border border-border bg-background px-3 py-2 text-foreground shadow-sm dark:bg-background/80"
                 >
                   {ORDER_STATUSES.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -140,9 +149,7 @@ export function CreateOrderButton({ deviceId, customerName }: CreateOrderButtonP
                 </p>
               ) : null}
 
-              {success ? (
-                <p className="text-sm text-green-600">Order created</p>
-              ) : null}
+              {success ? <p className="text-sm text-green-600">Order created</p> : null}
 
               <button
                 type="submit"

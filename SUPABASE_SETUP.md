@@ -5,6 +5,7 @@
 ### 1. Site URL Configuration (Fix Password Reset)
 
 In your Supabase Dashboard:
+
 1. Go to **Authentication** → **URL Configuration**
 2. Set **Site URL** to your production domain: `https://your-app.vercel.app`
 3. Add to **Redirect URLs**:
@@ -14,6 +15,7 @@ In your Supabase Dashboard:
 **Important**: Replace `your-app.vercel.app` with your actual Vercel domain.
 
 The password reset flow:
+
 1. User clicks "Forgot Password" on login page
 2. User enters email on `/forgot-password`
 3. Supabase sends email with magic link
@@ -64,11 +66,13 @@ CREATE POLICY "Allow authenticated read/write access" ON device_alert_settings
 ## Performance Tuning
 
 ### Current Optimizations Applied:
+
 - ✅ Page-level caching with 60-second revalidation
 - ✅ Removed unnecessary `force-dynamic` rendering
 - ✅ Parallel data fetching with `Promise.all()`
 
 ### Recommended:
+
 - Add indexes (SQL above) for faster queries
 - Consider using Supabase Edge Functions for complex operations
 - Use `select()` to fetch only needed columns
@@ -77,7 +81,21 @@ CREATE POLICY "Allow authenticated read/write access" ON device_alert_settings
 ## Environment Variables
 
 Required in Vercel:
+
 - `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anon/public key
 
 These are intentionally public and safe to embed in client-side code.
+
+## Device Data Warehouse Migration
+
+To enable CSV imports for toner levels, meter readings, warning history, and consumable events:
+
+1. Open the Supabase SQL editor.
+2. Run the statements in `supabase-device-enhancements.sql`. The script:
+   - Extends the existing `devices` table with `device_id`, `center_id`, `last_seen_at`, and other dashboard fields.
+   - Creates the `device_toner_snapshots`, `device_meter_readings`, `device_warning_events`, `device_consumable_events`, and `import_jobs` tables.
+   - Publishes helper views (`device_current_toner`, `device_status`) for the dashboard.
+3. If you already have duplicate `serial_number` or `device_id` values, resolve them before re-running the block that adds uniqueness constraints (the script will warn and skip the constraint when duplicates exist).
+
+After the migration, wire the CSV ingestion API to populate the new tables so the dashboard can surface low toner, waste bin levels, meter trends, and offline devices.

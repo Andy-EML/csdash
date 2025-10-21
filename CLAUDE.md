@@ -23,7 +23,7 @@ This is a **Next.js 15 app** using the **App Router**, TypeScript, Tailwind CSS,
 
 ### Route Groups & Layouts
 
-- **(dashboard)**: Authenticated pages, enforced by [layout.tsx](src/app/(dashboard)/layout.tsx) which redirects to `/login` if no session
+- **(dashboard)**: Authenticated pages, enforced by [layout.tsx](<src/app/(dashboard)/layout.tsx>) which redirects to `/login` if no session
   - `/devices` - main device list/dashboard
   - `/devices/[serial]` - device detail page
   - `/devices/[serial]/settings` - per-device alert thresholds
@@ -35,10 +35,12 @@ This is a **Next.js 15 app** using the **App Router**, TypeScript, Tailwind CSS,
 ### Supabase Integration
 
 **Environment variables** (required):
+
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
 **Client patterns**:
+
 - **Server-side**: Import `getSupabaseServerClient()` from [src/lib/supabase/server.ts](src/lib/supabase/server.ts) in server components and API routes. This handles cookies and returns a request-aware client.
 - **Client-side**: Import `getSupabaseBrowserClient()` from [src/lib/supabase/client.ts](src/lib/supabase/client.ts) in `"use client"` components only. Throws if env vars missing.
 
@@ -46,7 +48,7 @@ This is a **Next.js 15 app** using the **App Router**, TypeScript, Tailwind CSS,
 
 ### Data Transformation Pattern
 
-The app uses a **Gas_Gage table** as its primary data source but transforms rows to a `DeviceRow` shape for compatibility with the UI dashboard. See [src/app/(dashboard)/devices/page.tsx](src/app/(dashboard)/devices/page.tsx) for the `transformGasGageToDevice()` function. This pattern keeps the UI decoupled from the exact database schema.
+The app uses a **Gas_Gage table** as its primary data source but transforms rows to a `DeviceRow` shape for compatibility with the UI dashboard. See [src/app/(dashboard)/devices/page.tsx](<src/app/(dashboard)/devices/page.tsx>) for the `transformGasGageToDevice()` function. This pattern keeps the UI decoupled from the exact database schema.
 
 ### CSV Import Flow
 
@@ -70,22 +72,26 @@ Each device can have custom toner thresholds stored in `device_alert_settings` t
 ## Development Patterns
 
 ### Server vs Client Components
+
 - Files with `"use client"` directive are client components
 - Root and dashboard layouts are **async server components** (fetch session before rendering)
 - Prefer server components for data fetching; use client components only when needed for interactivity
 
 ### API Route Conventions
+
 - Located in `src/app/api/*/route.ts`
 - Export HTTP handler functions: `export async function POST(request: NextRequest) { ... }`
 - Use `getSupabaseServerClient()` to get request-aware Supabase client
 - Return `NextResponse.json()`
 
 ### Styling
+
 - **Tailwind CSS v4** + utility classes
 - **CSS variables** for theming (dark mode via `next-themes`)
 - Use `cn()` utility from [src/lib/utils.ts](src/lib/utils.ts) to merge class names
 
 ### Database Operations
+
 - Use typed inserts/updates: `Database["public"]["Tables"]["TableName"]["Insert"]`
 - Batch large operations (see CSV import for pattern)
 - Use `upsert()` with `onConflict` for idempotent imports

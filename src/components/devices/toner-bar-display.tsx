@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { TonerColor } from "@/lib/database.types";
 
 export type TonerBarDisplayProps = {
   black: number | null;
@@ -10,39 +9,41 @@ export type TonerBarDisplayProps = {
   yellow: number | null;
   wasteToner?: number | null;
   className?: string;
-  showLabels?: boolean;
 };
 
-const TONER_COLORS: Record<string, { bg: string; text: string; label: string; fill: string }> = {
+const TONER_COLORS: Record<
+  string,
+  { bg: string; text: string; label: string; fill: string }
+> = {
   black: {
-    bg: "bg-neutral-100",
-    text: "text-neutral-900",
+    bg: "bg-neutral-100 dark:bg-neutral-800/70",
+    text: "text-neutral-900 dark:text-neutral-100",
     label: "K",
-    fill: "bg-neutral-900",
+    fill: "bg-neutral-900 dark:bg-neutral-200",
   },
   cyan: {
-    bg: "bg-cyan-50",
-    text: "text-cyan-900",
+    bg: "bg-cyan-50 dark:bg-cyan-500/20",
+    text: "text-cyan-900 dark:text-cyan-100",
     label: "C",
-    fill: "bg-cyan-500",
+    fill: "bg-cyan-500 dark:bg-cyan-400",
   },
   magenta: {
-    bg: "bg-pink-50",
-    text: "text-pink-900",
+    bg: "bg-pink-50 dark:bg-fuchsia-500/20",
+    text: "text-pink-900 dark:text-pink-100",
     label: "M",
-    fill: "bg-pink-500",
+    fill: "bg-pink-500 dark:bg-pink-400",
   },
   yellow: {
-    bg: "bg-yellow-50",
-    text: "text-yellow-900",
+    bg: "bg-yellow-50 dark:bg-amber-500/20",
+    text: "text-yellow-900 dark:text-yellow-100",
     label: "Y",
-    fill: "bg-yellow-400",
+    fill: "bg-yellow-400 dark:bg-amber-300",
   },
   waste: {
-    bg: "bg-red-50",
-    text: "text-red-900",
+    bg: "bg-red-50 dark:bg-red-500/20",
+    text: "text-red-900 dark:text-red-100",
     label: "Waste",
-    fill: "bg-red-500",
+    fill: "bg-red-500 dark:bg-red-400",
   },
 };
 
@@ -62,18 +63,18 @@ function TonerBar({ label, value, colorKey, threshold = 15 }: TonerBarProps) {
   return (
     <div className="flex items-center gap-3">
       {/* Label */}
-      <div className={cn("w-14 text-sm font-semibold", config.text)}>
-        {label}
-      </div>
+      <div className={cn("w-14 text-sm font-semibold", config.text)}>{label}</div>
 
       {/* Bar Container */}
-      <div className="flex-1 relative">
+      <div className="relative flex-1">
         <div
           className={cn(
-            "h-10 rounded-lg overflow-hidden border-2",
+            "h-10 overflow-hidden rounded-lg border-2 border-border",
             config.bg,
-            isLow ? "border-orange-300" : "border-neutral-200",
-            isCritical && "border-red-400 shadow-sm shadow-red-100"
+            isLow
+              ? "border-orange-300 dark:border-orange-400"
+              : "border-border/70 dark:border-border",
+            isCritical && "border-red-400 shadow-sm shadow-red-100 dark:border-red-500"
           )}
         >
           {/* Fill */}
@@ -101,12 +102,9 @@ function TonerBar({ label, value, colorKey, threshold = 15 }: TonerBarProps) {
 
         {/* Warning Icon for Low Levels */}
         {isLow && value !== null && (
-          <div className="absolute -right-8 top-1/2 -translate-y-1/2">
+          <div className="absolute top-1/2 -right-8 -translate-y-1/2">
             <svg
-              className={cn(
-                "h-6 w-6",
-                isCritical ? "text-red-500" : "text-orange-500"
-              )}
+              className={cn("h-6 w-6", isCritical ? "text-red-500" : "text-orange-500")}
               fill="currentColor"
               viewBox="0 0 20 20"
             >
@@ -130,7 +128,6 @@ export function TonerBarDisplay({
   yellow,
   wasteToner,
   className,
-  showLabels = true,
 }: TonerBarDisplayProps) {
   return (
     <div className={cn("space-y-2", className)}>

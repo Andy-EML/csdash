@@ -1,0 +1,233 @@
+[
+  {
+    "DeviceID": "A4Y4321002996",
+    "Serial": "A4Y4321002996",
+    "Center": "GB500",
+    "Model": "ineo+3350_Ver35",
+    "CodeName": "Venus",
+    "Customer": "Park House",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.09.30 10:18:28"
+  },
+  {
+    "DeviceID": "A5C2321001283",
+    "Serial": "A5C2321001283",
+    "Center": "GB500",
+    "Model": "ineo+284e_5th",
+    "CodeName": "ZeusMLK",
+    "Customer": "Elmdale Maintenace (Stock)",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.09.27 10:14:39"
+  },
+  {
+    "DeviceID": "A5C4321000483",
+    "Serial": "A5C4321000483",
+    "Center": "GB500",
+    "Model": "ineo+224e_5th",
+    "CodeName": "ZeusMLK",
+    "Customer": "Valeo Foods",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.06.12 9:05:31"
+  },
+  {
+    "DeviceID": "A79J321000136",
+    "Serial": "A79J321000136",
+    "Center": "GB500",
+    "Model": "ineo+658_Ver42",
+    "CodeName": "ZeusS",
+    "Customer": "Pyrford",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.08.09 10:09:05"
+  },
+  {
+    "DeviceID": "A79M321000903",
+    "Serial": "A79M321000903",
+    "Center": "GB500",
+    "Model": "ineo+458_Ver42",
+    "CodeName": "ZeusS",
+    "Customer": "WLS Solicitors",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.06.27 10:10:25"
+  },
+  {
+    "DeviceID": "A7R0321000863",
+    "Serial": "A7R0321000863",
+    "Center": "GB500",
+    "Model": "ineo+258_Ver42",
+    "CodeName": "ZeusS",
+    "Customer": "Park House",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.09.30 10:16:37"
+  },
+  {
+    "DeviceID": "A7R0321200744",
+    "Serial": "A7R0321200744",
+    "Center": "GB500",
+    "Model": "ineo+258_Ver42",
+    "CodeName": "ZeusS",
+    "Customer": "Andrew Storch",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2025.10.10 9:21:17"
+  },
+  {
+    "DeviceID": "A8JE321000095",
+    "Serial": "A8JE321000095",
+    "Center": "GB500",
+    "Model": "ineo+759_Ver42",
+    "CodeName": "MinervaMLK",
+    "Customer": "Park House",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.09.30 10:07:16"
+  },
+  {
+    "DeviceID": "A8JE321000100",
+    "Serial": "A8JE321000100",
+    "Center": "GB500",
+    "Model": "ineo+759_Ver42",
+    "CodeName": "MinervaMLK",
+    "Customer": "Park House",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.09.30 10:07:16"
+  },
+  {
+    "DeviceID": "A92F321000177",
+    "Serial": "A92F321000177",
+    "Center": "GB500",
+    "Model": "ineo+3351",
+    "CodeName": "VenusMLK",
+    "Customer": "Tadpoles",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2025.05.27 12:12:57"
+  },
+  {
+    "DeviceID": "A92F321000590",
+    "Serial": "A92F321000590",
+    "Center": "GB500",
+    "Model": "ineo+3351_Ver42",
+    "CodeName": "VenusMLK",
+    "Customer": "Park House",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.09.30 10:12:29"
+  },
+  {
+    "DeviceID": "A93E021244075",
+    "Serial": "A93E021244075",
+    "Center": "GB500",
+    "Model": "bizhub C3350i_Ver22",
+    "CodeName": "Sparrow_MFP",
+    "Customer": "Park House",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.09.30 10:07:16"
+  },
+  {
+    "DeviceID": "A93E027002012",
+    "Serial": "A93E027002012",
+    "Center": "GB500",
+    "Model": "bizhub C3351i",
+    "CodeName": "SparrowIII_MFP",
+    "Customer": "Howden Insurance (C\u0026C)",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.11.08 9:25:34"
+  },
+  {
+    "DeviceID": "A93E321000797",
+    "Serial": "A93E321000797",
+    "Center": "GB500",
+    "Model": "bizhub C3350i_Ver22",
+    "CodeName": "Sparrow_MFP",
+    "Customer": "Partners \u0026",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.07.29 10:15:02"
+  },
+  {
+    "DeviceID": "A93E321001010",
+    "Serial": "A93E321001010",
+    "Center": "GB500",
+    "Model": "ineo+3350i_Ver23",
+    "CodeName": "Sparrow_MFP",
+    "Customer": "Elmdale Maintenace (Stock)",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.08.19 10:07:49"
+  },
+  {
+    "DeviceID": "A93E321001162",
+    "Serial": "A93E321001162",
+    "Center": "GB500",
+    "Model": "bizhub C3350i",
+    "CodeName": "Sparrow_MFP",
+    "Customer": "Howden Insurance (Stock)",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2025.02.06 9:09:02"
+  },
+  {
+    "DeviceID": "A93E321200514",
+    "Serial": "A93E321200514",
+    "Center": "GB500",
+    "Model": "bizhub C3350i_Ver23",
+    "CodeName": "Sparrow_MFP",
+    "Customer": "Howden Insurance (Stock)",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2025.04.30 9:31:38"
+  },
+  {
+    "DeviceID": "AA2K321001660",
+    "Serial": "AA2K321001660",
+    "Center": "GB500",
+    "Model": "bizhub C300i_Ver23",
+    "CodeName": "Eagle",
+    "Customer": "Howden Insurance (Stock)",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.11.08 10:45:42"
+  },
+  {
+    "DeviceID": "AA2M021122549",
+    "Serial": "AA2M021122549",
+    "Center": "GB500",
+    "Model": "bizhub C250i",
+    "CodeName": "Eagle",
+    "Customer": "Cranbourne School",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2023.10.02 11:03:15"
+  },
+  {
+    "DeviceID": "AA7P321000022",
+    "Serial": "AA7P321000022",
+    "Center": "GB500",
+    "Model": "ineo+550i_Ver23",
+    "CodeName": "Eagle",
+    "Customer": "Park House",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.09.30 10:14:32"
+  },
+  {
+    "DeviceID": "AAJP021247765",
+    "Serial": "AAJP021247765",
+    "Center": "GB500",
+    "Model": "bizhub C3320i_Ver22",
+    "CodeName": "Sparrow_AIO",
+    "Customer": "iCollege",
+    "ServiceOffice": "Elmdale Maintenance",
+    "HostName": "",
+    "ServerDate": "2024.01.12 15:45:31"
+  }
+]

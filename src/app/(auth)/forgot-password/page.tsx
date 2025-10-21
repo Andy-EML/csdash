@@ -40,20 +40,31 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-neutral-100 px-6 py-12">
+      <main className="flex min-h-screen items-center justify-center bg-background px-6 py-12 transition-colors">
         <div className="w-full max-w-md rounded-2xl bg-white p-10 shadow-xl">
           <div className="text-center">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
-              <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              <svg
+                className="h-6 w-6 text-blue-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                />
               </svg>
             </div>
             <h1 className="text-2xl font-semibold text-neutral-900">Check Your Email</h1>
             <p className="mt-2 text-sm text-neutral-500">
-              We've sent a password reset link to <strong>{email}</strong>
+              We&apos;ve sent a password reset link to <strong>{email}</strong>
             </p>
             <p className="mt-4 text-xs text-neutral-400">
-              Click the link in the email to reset your password. The link will expire in 1 hour.
+              Click the link in the email to reset your password. The link will expire in
+              1 hour.
             </p>
             <div className="mt-6">
               <a
@@ -70,12 +81,13 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-100 px-6 py-12">
+    <main className="flex min-h-screen items-center justify-center bg-background px-6 py-12 transition-colors">
       <div className="w-full max-w-md rounded-2xl bg-white p-10 shadow-xl">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-semibold text-neutral-900">Forgot Password</h1>
           <p className="mt-2 text-sm text-neutral-500">
-            Enter your email address and we'll send you a link to reset your password.
+            Enter your email address and we&apos;ll send you a link to reset your
+            password.
           </p>
         </div>
 
@@ -93,7 +105,7 @@ export default function ForgotPasswordPage() {
               onInput={(event) => setEmail((event.target as HTMLInputElement).value)}
               autoComplete="username"
               required
-              className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 relative z-10"
+              className="relative z-10 rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none"
               placeholder="you@example.com"
             />
           </div>
@@ -108,7 +120,7 @@ export default function ForgotPasswordPage() {
 
           <button
             type="submit"
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 focus:ring-2 focus:ring-blue-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             disabled={loading}
           >
             {loading ? "Sending..." : "Send Reset Link"}

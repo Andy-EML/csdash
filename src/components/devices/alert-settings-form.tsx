@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { Save, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import type { DeviceAlertSettingsRow } from "@/lib/database.types";
@@ -17,21 +23,35 @@ export type AlertSettingsFormProps = {
   onSave?: () => void;
 };
 
-export function AlertSettingsForm({ deviceId, deviceName, initialSettings, onSave }: AlertSettingsFormProps) {
-  const [blackThreshold, setBlackThreshold] = useState(initialSettings?.black_threshold ?? DEFAULT_THRESHOLD);
-  const [cyanThreshold, setCyanThreshold] = useState(initialSettings?.cyan_threshold ?? DEFAULT_THRESHOLD);
-  const [magentaThreshold, setMagentaThreshold] = useState(initialSettings?.magenta_threshold ?? DEFAULT_THRESHOLD);
-  const [yellowThreshold, setYellowThreshold] = useState(initialSettings?.yellow_threshold ?? DEFAULT_THRESHOLD);
-  const [specialThreshold, setSpecialThreshold] = useState(initialSettings?.special_color_threshold ?? DEFAULT_THRESHOLD);
+export function AlertSettingsForm({
+  deviceId,
+  deviceName,
+  initialSettings,
+  onSave,
+}: AlertSettingsFormProps) {
+  const [blackThreshold, setBlackThreshold] = useState(
+    initialSettings?.black_threshold ?? DEFAULT_THRESHOLD
+  );
+  const [cyanThreshold, setCyanThreshold] = useState(
+    initialSettings?.cyan_threshold ?? DEFAULT_THRESHOLD
+  );
+  const [magentaThreshold, setMagentaThreshold] = useState(
+    initialSettings?.magenta_threshold ?? DEFAULT_THRESHOLD
+  );
+  const [yellowThreshold, setYellowThreshold] = useState(
+    initialSettings?.yellow_threshold ?? DEFAULT_THRESHOLD
+  );
   const [isSaving, setIsSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   const handleReset = () => {
     setBlackThreshold(DEFAULT_THRESHOLD);
     setCyanThreshold(DEFAULT_THRESHOLD);
     setMagentaThreshold(DEFAULT_THRESHOLD);
     setYellowThreshold(DEFAULT_THRESHOLD);
-    setSpecialThreshold(DEFAULT_THRESHOLD);
     setMessage(null);
   };
 
@@ -51,7 +71,6 @@ export function AlertSettingsForm({ deviceId, deviceName, initialSettings, onSav
           cyan_threshold: cyanThreshold,
           magenta_threshold: magentaThreshold,
           yellow_threshold: yellowThreshold,
-          special_color_threshold: specialThreshold,
         }),
       });
 
@@ -78,13 +97,17 @@ export function AlertSettingsForm({ deviceId, deviceName, initialSettings, onSav
       <CardHeader>
         <CardTitle>Alert Thresholds</CardTitle>
         <CardDescription>
-          {deviceName ? `Configure alert thresholds for ${deviceName}` : `Configure alert thresholds for device ${deviceId}`}
+          {deviceName
+            ? `Configure alert thresholds for ${deviceName}`
+            : `Configure alert thresholds for device ${deviceId}`}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="rounded-lg border bg-muted/50 p-4">
-          <p className="text-sm text-muted-foreground">
-            Set the toner level percentage at which alerts should be triggered for this device. Alerts will appear on the dashboard when toner levels fall below these thresholds.
+        <div className="bg-muted/50 rounded-lg border p-4">
+          <p className="text-muted-foreground text-sm">
+            Set the toner level percentage at which alerts should be triggered for this
+            device. Alerts will appear on the dashboard when toner levels fall below these
+            thresholds.
           </p>
         </div>
 
@@ -97,9 +120,13 @@ export function AlertSettingsForm({ deviceId, deviceName, initialSettings, onSav
               min="0"
               max="100"
               value={blackThreshold}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setBlackThreshold(parseInt(e.target.value) || 0)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setBlackThreshold(parseInt(e.target.value) || 0)
+              }
             />
-            <p className="text-xs text-muted-foreground">Alert when black toner falls below this level</p>
+            <p className="text-muted-foreground text-xs">
+              Alert when black toner falls below this level
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -110,9 +137,13 @@ export function AlertSettingsForm({ deviceId, deviceName, initialSettings, onSav
               min="0"
               max="100"
               value={cyanThreshold}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCyanThreshold(parseInt(e.target.value) || 0)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setCyanThreshold(parseInt(e.target.value) || 0)
+              }
             />
-            <p className="text-xs text-muted-foreground">Alert when cyan toner falls below this level</p>
+            <p className="text-muted-foreground text-xs">
+              Alert when cyan toner falls below this level
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -123,9 +154,13 @@ export function AlertSettingsForm({ deviceId, deviceName, initialSettings, onSav
               min="0"
               max="100"
               value={magentaThreshold}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMagentaThreshold(parseInt(e.target.value) || 0)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setMagentaThreshold(parseInt(e.target.value) || 0)
+              }
             />
-            <p className="text-xs text-muted-foreground">Alert when magenta toner falls below this level</p>
+            <p className="text-muted-foreground text-xs">
+              Alert when magenta toner falls below this level
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -136,22 +171,13 @@ export function AlertSettingsForm({ deviceId, deviceName, initialSettings, onSav
               min="0"
               max="100"
               value={yellowThreshold}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setYellowThreshold(parseInt(e.target.value) || 0)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setYellowThreshold(parseInt(e.target.value) || 0)
+              }
             />
-            <p className="text-xs text-muted-foreground">Alert when yellow toner falls below this level</p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="special-threshold">Special Color Toner (%)</Label>
-            <Input
-              id="special-threshold"
-              type="number"
-              min="0"
-              max="100"
-              value={specialThreshold}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSpecialThreshold(parseInt(e.target.value) || 0)}
-            />
-            <p className="text-xs text-muted-foreground">Alert when special color toner falls below this level</p>
+            <p className="text-muted-foreground text-xs">
+              Alert when yellow toner falls below this level
+            </p>
           </div>
         </div>
 
@@ -169,11 +195,11 @@ export function AlertSettingsForm({ deviceId, deviceName, initialSettings, onSav
 
         <div className="flex gap-2">
           <Button onClick={handleSave} disabled={isSaving}>
-            <Save className="h-4 w-4 mr-2" />
+            <Save className="mr-2 h-4 w-4" />
             {isSaving ? "Saving..." : "Save Settings"}
           </Button>
           <Button variant="outline" onClick={handleReset} disabled={isSaving}>
-            <RotateCcw className="h-4 w-4 mr-2" />
+            <RotateCcw className="mr-2 h-4 w-4" />
             Reset to Default
           </Button>
         </div>

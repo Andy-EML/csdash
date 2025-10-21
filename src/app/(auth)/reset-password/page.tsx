@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +16,9 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     const checkSession = async () => {
       const supabase = getSupabaseBrowserClient();
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
       if (!session) {
         setError("Invalid or expired reset link. Please request a new password reset.");
@@ -70,15 +71,27 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-neutral-100 px-6 py-12">
+      <main className="flex min-h-screen items-center justify-center bg-background px-6 py-12 transition-colors">
         <div className="w-full max-w-md rounded-2xl bg-white p-10 shadow-xl">
           <div className="text-center">
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-              <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              <svg
+                className="h-6 w-6 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
               </svg>
             </div>
-            <h1 className="text-2xl font-semibold text-neutral-900">Password Reset Successful</h1>
+            <h1 className="text-2xl font-semibold text-neutral-900">
+              Password Reset Successful
+            </h1>
             <p className="mt-2 text-sm text-neutral-500">
               Your password has been updated. Redirecting to login...
             </p>
@@ -89,13 +102,11 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-100 px-6 py-12">
+    <main className="flex min-h-screen items-center justify-center bg-background px-6 py-12 transition-colors">
       <div className="w-full max-w-md rounded-2xl bg-white p-10 shadow-xl">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-semibold text-neutral-900">Reset Your Password</h1>
-          <p className="mt-2 text-sm text-neutral-500">
-            Enter your new password below.
-          </p>
+          <p className="mt-2 text-sm text-neutral-500">Enter your new password below.</p>
         </div>
 
         <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
@@ -113,13 +124,16 @@ export default function ResetPasswordPage() {
               autoComplete="new-password"
               required
               minLength={6}
-              className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 relative z-10"
+              className="relative z-10 rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none"
               placeholder="At least 6 characters"
             />
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-neutral-700" htmlFor="confirmPassword">
+            <label
+              className="text-sm font-medium text-neutral-700"
+              htmlFor="confirmPassword"
+            >
               Confirm Password
             </label>
             <input
@@ -128,11 +142,13 @@ export default function ResetPasswordPage() {
               type="password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
-              onInput={(event) => setConfirmPassword((event.target as HTMLInputElement).value)}
+              onInput={(event) =>
+                setConfirmPassword((event.target as HTMLInputElement).value)
+              }
               autoComplete="new-password"
               required
               minLength={6}
-              className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 relative z-10"
+              className="relative z-10 rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none"
               placeholder="Re-enter your password"
             />
           </div>
@@ -147,7 +163,7 @@ export default function ResetPasswordPage() {
 
           <button
             type="submit"
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-500 focus:ring-2 focus:ring-blue-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
             disabled={loading}
           >
             {loading ? "Updating Password..." : "Reset Password"}

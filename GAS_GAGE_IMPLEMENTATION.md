@@ -5,6 +5,7 @@ This document describes the Gas Gage integration that has been implemented for y
 ## Overview
 
 The implementation allows you to:
+
 1. Import device data from CSV files (Gas Gage exports)
 2. View devices on a dashboard with real-time toner level monitoring
 3. Set custom alert thresholds per device for each toner color
@@ -17,7 +18,9 @@ The implementation allows you to:
 Two new tables have been added to Supabase:
 
 #### `Gas_Gage` Table
+
 Stores device information imported from CSV files (note: table name is case-sensitive):
+
 - Device identification (CenterID, DeviceID, Serial Number, Model)
 - Toner levels (Black, Cyan, Magenta, Yellow, Special Color)
 - Customer information (Customer, Sales Office, Service Office)
@@ -25,7 +28,9 @@ Stores device information imported from CSV files (note: table name is case-sens
 - Toner replacement dates
 
 #### `device_alert_settings` Table
+
 Stores custom alert thresholds for each device:
+
 - Per-device toner thresholds (0-100%)
 - Default: 15% for all colors
 - Customizable for each color independently
@@ -35,6 +40,7 @@ Stores custom alert thresholds for each device:
 **Location**: `/devices/import`
 
 **Features**:
+
 - Drag-and-drop or file selection interface
 - Real-time CSV parsing and validation
 - Preview of parsed data before upload
@@ -44,6 +50,7 @@ Stores custom alert thresholds for each device:
 
 **CSV Format Requirements**:
 Required columns:
+
 - CenterID
 - DeviceID
 - Serial Number
@@ -52,6 +59,7 @@ Required columns:
 - Black, Cyan, Magenta, Yellow (toner percentages)
 
 Optional columns:
+
 - All other fields from the Gas_Gage export
 
 ### 3. Dashboard Integration
@@ -59,6 +67,7 @@ Optional columns:
 **Location**: `/devices`
 
 **Features**:
+
 - Displays devices from Gas_Gage table
 - Real-time toner level monitoring
 - Status indicators (Critical, Warning, OK)
@@ -67,6 +76,7 @@ Optional columns:
 - "Import CSV" button for quick access
 
 **Alert Logic**:
+
 - Uses custom thresholds from device_alert_settings table
 - Falls back to default 15% threshold if no custom settings
 - Generates warnings when toner falls below configured threshold
@@ -77,6 +87,7 @@ Optional columns:
 **Location**: `/devices/[serial]/settings`
 
 **Features**:
+
 - Configure thresholds per device
 - Separate settings for each toner color
 - Reset to default (15%) option
@@ -96,6 +107,7 @@ Run the SQL migration in your Supabase SQL Editor:
 ```
 
 This will create:
+
 - `Gas_Gage` table (case-sensitive)
 - `device_alert_settings` table
 - Indexes for performance
@@ -105,12 +117,14 @@ This will create:
 ### 2. Dependencies
 
 The required dependencies have already been installed:
+
 - `papaparse` - CSV parsing library
 - `@types/papaparse` - TypeScript types
 
 ### 3. Test the Implementation
 
 1. **Start the dev server**:
+
    ```bash
    npm run dev
    ```
@@ -193,9 +207,11 @@ src/
 ## API Endpoints
 
 ### POST `/api/gas-gage/import`
+
 Imports device data from CSV
 
 **Request Body**:
+
 ```json
 {
   "data": [
@@ -216,6 +232,7 @@ Imports device data from CSV
 ```
 
 **Response**:
+
 ```json
 {
   "success": 4,
@@ -224,9 +241,11 @@ Imports device data from CSV
 ```
 
 ### POST `/api/device-alert-settings`
+
 Saves alert threshold settings for a device
 
 **Request Body**:
+
 ```json
 {
   "device_id": "A93E321000148",
@@ -239,41 +258,47 @@ Saves alert threshold settings for a device
 ```
 
 ### GET `/api/device-alert-settings?device_id={deviceId}`
+
 Retrieves alert settings for a device
 
 ## Data Mapping
 
 The CSV data is transformed as follows:
 
-| CSV Column | Database Column |
-|------------|----------------|
-| CenterID | center_id |
-| DeviceID | device_id |
-| Serial Number | serial_number |
-| Model | model |
-| Black | black |
-| Cyan | cyan |
-| Magenta | magenta |
-| Yellow | yellow |
-| Customer | customer |
-| Device Location | device_location |
-| Latest Receive Date | latest_receive_date |
+| CSV Column                     | Database Column              |
+| ------------------------------ | ---------------------------- |
+| CenterID                       | center_id                    |
+| DeviceID                       | device_id                    |
+| Serial Number                  | serial_number                |
+| Model                          | model                        |
+| Black                          | black                        |
+| Cyan                           | cyan                         |
+| Magenta                        | magenta                      |
+| Yellow                         | yellow                       |
+| Customer                       | customer                     |
+| Device Location                | device_location              |
+| Latest Receive Date            | latest_receive_date          |
 | Toner Replacement Date (Black) | toner_replacement_date_black |
-| ... | ... |
+| ...                            | ...                          |
 
 ## Customization Options
 
 ### Adjusting Default Threshold
+
 Edit `src/components/devices/alert-settings-form.tsx`:
+
 ```typescript
 const DEFAULT_THRESHOLD = 15; // Change this value
 ```
 
 ### Modifying Alert Logic
+
 Edit `src/app/(dashboard)/devices/page.tsx` in the device transformation section to adjust how warnings are generated.
 
 ### Changing Import Batch Size
+
 Edit `src/app/api/gas-gage/import/route.ts`:
+
 ```typescript
 const batchSize = 100; // Adjust based on your needs
 ```
@@ -281,18 +306,21 @@ const batchSize = 100; // Adjust based on your needs
 ## Troubleshooting
 
 ### CSV Upload Issues
+
 - Ensure all required columns are present
 - Check that toner values are numbers (0-100)
 - Verify date formats are consistent
 - Look at browser console for specific errors
 
 ### Database Errors
+
 - Verify Supabase connection is working
 - Check that tables were created successfully
 - Ensure RLS policies are configured
 - Verify API keys are correct
 
 ### Alert Thresholds Not Working
+
 - Confirm settings were saved (check success message)
 - Verify device_id matches between tables
 - Check browser console for API errors
@@ -301,6 +329,7 @@ const batchSize = 100; // Adjust based on your needs
 ## Next Steps
 
 Consider implementing:
+
 1. **Automated CSV imports** - Schedule regular imports via cron job
 2. **Email notifications** - Alert when devices hit critical thresholds
 3. **Historical tracking** - Log toner level changes over time
@@ -311,6 +340,7 @@ Consider implementing:
 ## Support
 
 For issues or questions:
+
 1. Check the browser console for errors
 2. Review Supabase logs for backend issues
 3. Verify CSV format matches expected structure

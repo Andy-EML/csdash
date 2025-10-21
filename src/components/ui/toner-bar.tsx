@@ -34,8 +34,8 @@ export function TonerBar({ value, label, density, color }: TonerBarProps) {
   if (value === null || Number.isNaN(value)) {
     return (
       <div className={cn("flex items-center gap-2", styles.container)}>
-        <span className="text-[11px] font-semibold text-muted-foreground">{label}</span>
-        <span className="text-[11px] text-muted-foreground">--</span>
+        <span className="text-muted-foreground text-[11px] font-semibold">{label}</span>
+        <span className="text-muted-foreground text-[11px]">--</span>
       </div>
     );
   }
@@ -45,7 +45,7 @@ export function TonerBar({ value, label, density, color }: TonerBarProps) {
 
   return (
     <div className={cn("flex items-center gap-2", styles.container)}>
-      <span className="text-[11px] font-semibold text-muted-foreground">{label}</span>
+      <span className="text-muted-foreground text-[11px] font-semibold">{label}</span>
       <div className="flex flex-1 items-center gap-1">
         <Progress
           value={clamped}
@@ -53,7 +53,9 @@ export function TonerBar({ value, label, density, color }: TonerBarProps) {
           indicatorClassName="bg-transparent"
           indicatorStyle={{ backgroundColor: indicatorColor }}
         />
-        <span className={cn("font-semibold text-foreground", styles.font)}>{Math.round(clamped)}%</span>
+        <span className={cn("text-foreground font-semibold", styles.font)}>
+          {Math.round(clamped)}%
+        </span>
       </div>
     </div>
   );

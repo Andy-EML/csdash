@@ -1,8 +1,11 @@
-﻿"use client";
+"use client";
 
-import type { TonerKey } from "@/lib/database.types";
+import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
+import { QuickOrderButton, TonerScope } from "@/components/orders/quick-order-button";
+import type { TonerKey } from "@/lib/database.types";
+import type { DeviceOrderPayload } from "@/lib/orders/create-supply-order";
 
 // Dynamically import the client-only TonerGauge (it depends on recharts)
 const TonerGauge = dynamic(
@@ -10,17 +13,25 @@ const TonerGauge = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="h-28 w-28 p-3 flex items-center justify-center">
-        <div className="h-14 w-14 rounded-full bg-muted/30 animate-pulse" />
+      <div className="flex h-28 w-28 items-center justify-center p-3">
+        <div className="bg-muted/30 h-14 w-14 animate-pulse rounded-full" />
       </div>
     ),
   }
 );
 
+type OrderConfig = {
+  customerName: string;
+  device: DeviceOrderPayload;
+  disabled?: boolean;
+};
+
 export type TonerGaugeGroupProps = {
   values: Partial<Record<TonerKey, number | null | undefined>>;
   size?: "xs" | "sm" | "md";
   className?: string;
+  orderConfig?: OrderConfig;
+  activeOrderKeys?: TonerKey[];
 };
 
 const TONER_CONFIG: Array<{
@@ -34,7 +45,27 @@ const TONER_CONFIG: Array<{
   { key: "k", label: "Black", color: "#000000" },
 ];
 
-export function TonerGaugeGroup({ values, size = "md", className }: TonerGaugeGroupProps) {
+const TONER_SCOPE_MAP: Record<TonerKey, TonerScope> = {
+  c: "cyan",
+  m: "magenta",
+  y: "yellow",
+  k: "black",
+};
+
+export function TonerGaugeGroup({
+  values,
+  size = "md",
+  className,
+  orderConfig,
+  activeOrderKeys,
+}: TonerGaugeGroupProps) {
+  const activeOrderSet = useMemo(() => {
+    if (!activeOrderKeys || activeOrderKeys.length === 0) {
+      return null;
+    }
+    return new Set(activeOrderKeys);
+  }, [activeOrderKeys]);
+
   const gridCols =
     size === "md"
       ? "grid-cols-2 lg:grid-cols-4"
@@ -45,7 +76,23 @@ export function TonerGaugeGroup({ values, size = "md", className }: TonerGaugeGr
   return (
     <div className={cn("grid gap-3", gridCols, className)}>
       {TONER_CONFIG.map(({ key, label, color }) => (
-        <TonerGauge key={key} label={label} color={color} value={values[key]} size={size} />
+        <div key={key} className="flex flex-col items-center gap-2">
+          <TonerGauge
+            label={label}
+            color={color}
+            value={values[key]}
+            size={size}
+            highlighted={activeOrderSet?.has(key)}
+          />
+          {orderConfig ? (
+            <QuickOrderButton
+              device={orderConfig.device}
+              customerName={orderConfig.customerName}
+              scope={TONER_SCOPE_MAP[key]}
+              disabled={orderConfig.disabled}
+            />
+          ) : null}
+        </div>
       ))}
     </div>
   );

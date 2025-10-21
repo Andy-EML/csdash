@@ -4,36 +4,23 @@ import { useState, useCallback } from "react";
 import { FileText, AlertCircle, CheckCircle2, X } from "lucide-react";
 import { IconUpload } from "@/components/ui/icons";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-
-type CSVRow = {
-  CenterID: string;
-  DeviceID: string;
-  Model: string;
-  "Code Name": string;
-  "Serial Number": string;
-  ERPID: string;
-  Protocol: string;
-  Black: string;
-  Cyan: string;
-  Magenta: string;
-  Yellow: string;
-  "Special Color": string;
-  "Special Color Gage": string;
-  Customer: string;
-  "Sales Office": string;
-  "Service Office": string;
-  "Latest Receive Date": string;
-  "Device Host Name": string;
-  "Device Location": string;
-  "Toner Replacement Date (Black)": string;
-  "Toner Replacement Date (Cyan)": string;
-  "Toner Replacement Date (Magenta)": string;
-  "Toner Replacement Date (Yellow)": string;
-  "Toner Replacement Date (Special Color)": string;
-};
+import {
+  canonicalizeDeviceImportHeader,
+  detectDeviceImportType,
+  DeviceImportRow,
+  DeviceImportType,
+  getDeviceImportSchema,
+  normalizeDeviceImportRows,
+} from "@/lib/csv/device-import";
 
 type UploadStatus = "idle" | "parsing" | "uploading" | "success" | "error";
 
@@ -41,79 +28,98 @@ export type CSVUploadProps = {
   onUploadComplete?: () => void;
 };
 
+const CHUNK_SIZE = 1000;
+
 export function CSVUpload({ onUploadComplete }: CSVUploadProps) {
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [file, setFile] = useState<File | null>(null);
-  const [parsedData, setParsedData] = useState<CSVRow[]>([]);
+  const [parsedImport, setParsedImport] = useState<{
+    type: DeviceImportType;
+    rows: DeviceImportRow[];
+    headers: string[];
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [uploadResult, setUploadResult] = useState<{ success: number; errors: number } | null>(null);
+  const [uploadResult, setUploadResult] = useState<{
+    success: number;
+    errors: number;
+    errorDetails: string[];
+  } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{
+    completed: number;
+    total: number;
+  } | null>(null);
 
   const resetState = useCallback(() => {
     setStatus("idle");
     setFile(null);
-    setParsedData([]);
+    setParsedImport(null);
     setError(null);
     setUploadResult(null);
+    setUploadProgress(null);
   }, []);
-
-  const validateCSVHeaders = (headers: string[]): boolean => {
-    const requiredHeaders = [
-      "CenterID",
-      "DeviceID",
-      "Model",
-      "Serial Number",
-      "Black",
-      "Cyan",
-      "Magenta",
-      "Yellow",
-      "Customer",
-    ];
-    return requiredHeaders.every((header) => headers.includes(header));
-  };
 
   const parseCSV = useCallback((file: File) => {
     setStatus("parsing");
     setError(null);
 
     // Lazy-load papaparse only when parsing is requested
-    import("papaparse").then((module) => {
-      const PapaLib = module.default || module;
-      PapaLib.parse<CSVRow>(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results: { data: CSVRow[]; errors: Array<{ message: string }>; meta: { fields?: string[] } }) => {
-          if (results.errors.length > 0) {
-            setError(`CSV parsing errors: ${results.errors.map((e) => e.message).join(", ")}`);
-            setStatus("error");
-            return;
-          }
+    import("papaparse")
+      .then((module) => {
+        const PapaLib = module.default || module;
+        PapaLib.parse<Record<string, unknown>>(file, {
+          header: true,
+          skipEmptyLines: true,
+          transformHeader: canonicalizeDeviceImportHeader,
+          complete: (results: {
+            data: Record<string, unknown>[];
+            errors: Array<{ message: string }>;
+            meta: { fields?: string[] };
+          }) => {
+            if (results.errors.length > 0) {
+              setError(
+                `CSV parsing errors: ${results.errors.map((e) => e.message).join(", ")}`
+              );
+              setStatus("error");
+              return;
+            }
 
-          const headers = results.meta.fields || [];
-          if (!validateCSVHeaders(headers)) {
-            setError("CSV file is missing required columns. Please check the format.");
-            setStatus("error");
-            return;
-          }
+            const headers = results.meta.fields || [];
+            const detectedType = detectDeviceImportType(headers);
+            if (!detectedType) {
+              setError(
+                "CSV header does not match any supported format (Gas Gage, LatestTotal, WarningHistory, Yields/Consumables)."
+              );
+              setStatus("error");
+              return;
+            }
 
-          if (results.data.length === 0) {
-            setError("CSV file is empty.");
-            setStatus("error");
-            return;
-          }
+            if (results.data.length === 0) {
+              setError("CSV file is empty.");
+              setStatus("error");
+              return;
+            }
 
-          setParsedData(results.data);
-          setStatus("idle");
-        },
-        error: (error: Error) => {
-          setError(`Failed to parse CSV: ${error.message}`);
-          setStatus("error");
-        },
+            const normalizedRows = normalizeDeviceImportRows(detectedType, results.data);
+            setParsedImport({
+              type: detectedType,
+              rows: normalizedRows,
+              headers,
+            });
+            setStatus("idle");
+          },
+          error: (error: Error) => {
+            setError(`Failed to parse CSV: ${error.message}`);
+            setStatus("error");
+          },
+        });
+      })
+      .catch((err) => {
+        setError(
+          `Failed to load CSV parser: ${err instanceof Error ? err.message : String(err)}`
+        );
+        setStatus("error");
       });
-    }).catch((err) => {
-      setError(`Failed to load CSV parser: ${err instanceof Error ? err.message : String(err)}`);
-      setStatus("error");
-    });
   }, []);
 
   const handleFileChange = useCallback(
@@ -160,59 +166,104 @@ export function CSVUpload({ onUploadComplete }: CSVUploadProps) {
   );
 
   const handleUpload = useCallback(async () => {
-    if (parsedData.length === 0) {
+    if (!parsedImport || parsedImport.rows.length === 0) {
       return;
     }
 
     setStatus("uploading");
     setError(null);
+    setUploadProgress({
+      completed: 0,
+      total: Math.ceil(parsedImport.rows.length / CHUNK_SIZE),
+    });
+
+    let aggregatedSuccess = 0;
+    let aggregatedErrors = 0;
+    const aggregatedDetails: string[] = [];
 
     try {
-      const response = await fetch("/api/gas-gage/import", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ data: parsedData }),
-      });
+      const totalChunks = Math.ceil(parsedImport.rows.length / CHUNK_SIZE);
 
-      const result = await response.json();
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+        const start = chunkIndex * CHUNK_SIZE;
+        const end = start + CHUNK_SIZE;
+        const chunkRows = parsedImport.rows.slice(start, end);
 
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to upload data");
+        const response = await fetch("/api/gas-gage/import", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            type: parsedImport.type,
+            rows: chunkRows,
+            headers: parsedImport.headers,
+            fileName: file?.name,
+            chunkIndex,
+            totalChunks,
+            totalRows: parsedImport.rows.length,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Failed to upload data");
+        }
+
+        aggregatedSuccess += result.success ?? 0;
+        aggregatedErrors += result.errors ?? 0;
+        if (Array.isArray(result.errorDetails)) {
+          aggregatedDetails.push(...result.errorDetails);
+        }
+
+        setUploadProgress({ completed: chunkIndex + 1, total: totalChunks });
       }
 
-      setUploadResult({ success: result.success, errors: result.errors });
+      setUploadResult({
+        success: aggregatedSuccess,
+        errors: aggregatedErrors,
+        errorDetails: aggregatedDetails.slice(0, 25),
+      });
+      setUploadProgress(null);
       setStatus("success");
       onUploadComplete?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred during upload");
       setStatus("error");
+      setUploadProgress(null);
     }
-  }, [parsedData, onUploadComplete]);
+  }, [parsedImport, file, onUploadComplete]);
 
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle>Import Gas Gage Data</CardTitle>
-        <CardDescription>Upload a CSV file to update device information</CardDescription>
+        <CardTitle>Import Device Data</CardTitle>
+        <CardDescription>
+          Upload a supported CSV file to update device information
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {status === "idle" && parsedData.length === 0 && (
+        {status === "idle" && !parsedImport && (
           <div
             className={cn(
               "flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-colors",
-              isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+              isDragging
+                ? "border-primary bg-primary/5"
+                : "border-border hover:border-primary/50"
             )}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            <IconUpload className="mb-4 h-12 w-12 text-muted-foreground" />
+            <IconUpload className="text-muted-foreground mb-4 h-12 w-12" />
             <p className="mb-2 text-sm font-medium">Drag and drop your CSV file here</p>
-            <p className="mb-4 text-xs text-muted-foreground">or</p>
+            <p className="text-muted-foreground mb-4 text-xs">or</p>
             <label htmlFor="file-upload">
-              <Button type="button" onClick={() => document.getElementById("file-upload")?.click()}>
+              <Button
+                type="button"
+                onClick={() => document.getElementById("file-upload")?.click()}
+              >
                 Select File
               </Button>
               <input
@@ -229,21 +280,23 @@ export function CSVUpload({ onUploadComplete }: CSVUploadProps) {
         {status === "parsing" && (
           <div className="flex items-center justify-center rounded-lg border p-12">
             <div className="text-center">
-              <div className="mb-2 h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-              <p className="text-sm text-muted-foreground">Parsing CSV file...</p>
+              <div className="border-primary mx-auto mb-2 h-8 w-8 animate-spin rounded-full border-4 border-t-transparent" />
+              <p className="text-muted-foreground text-sm">Parsing CSV file...</p>
             </div>
           </div>
         )}
 
-        {parsedData.length > 0 && status !== "success" && (
+        {parsedImport && parsedImport.rows.length > 0 && status !== "success" && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-lg border bg-muted/50 p-4">
+            <div className="bg-muted/50 flex items-center justify-between rounded-lg border p-4">
               <div className="flex items-center gap-3">
-                <FileText className="h-5 w-5 text-primary" />
+                <FileText className="text-primary h-5 w-5" />
                 <div>
                   <p className="text-sm font-medium">{file?.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {parsedData.length} device{parsedData.length !== 1 ? "s" : ""} found
+                  <p className="text-muted-foreground text-xs">
+                    {parsedImport.rows.length} row
+                    {parsedImport.rows.length !== 1 ? "s" : ""} detected (
+                    {getDeviceImportSchema(parsedImport.type).label})
                   </p>
                 </div>
               </div>
@@ -252,79 +305,234 @@ export function CSVUpload({ onUploadComplete }: CSVUploadProps) {
               </Button>
             </div>
 
-            <div className="rounded-lg border">
-              <div className="max-h-64 overflow-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-muted">
-                    <tr>
-                      <th className="px-4 py-2 text-left font-medium">Device ID</th>
-                      <th className="px-4 py-2 text-left font-medium">Customer</th>
-                      <th className="px-4 py-2 text-left font-medium">Model</th>
-                      <th className="px-4 py-2 text-left font-medium">Toners (K/C/M/Y)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {parsedData.slice(0, 10).map((row, index) => (
-                      <tr key={index} className="hover:bg-muted/50">
-                        <td className="px-4 py-2 font-mono text-xs">{row.DeviceID}</td>
-                        <td className="px-4 py-2">{row.Customer}</td>
-                        <td className="px-4 py-2">{row.Model}</td>
-                        <td className="px-4 py-2">
-                          <div className="flex gap-2">
-                            <Badge variant="outline" className="text-xs">K: {row.Black}%</Badge>
-                            <Badge variant="outline" className="text-xs">C: {row.Cyan}%</Badge>
-                            <Badge variant="outline" className="text-xs">M: {row.Magenta}%</Badge>
-                            <Badge variant="outline" className="text-xs">Y: {row.Yellow}%</Badge>
-                          </div>
-                        </td>
+            {parsedImport.type === "gas_gage" && (
+              <div className="rounded-lg border">
+                <div className="max-h-64 overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted sticky top-0">
+                      <tr>
+                        <th className="px-4 py-2 text-left font-medium">Device ID</th>
+                        <th className="px-4 py-2 text-left font-medium">Customer</th>
+                        <th className="px-4 py-2 text-left font-medium">Model</th>
+                        <th className="px-4 py-2 text-left font-medium">
+                          Toners (K/C/M/Y)
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {parsedData.length > 10 && (
-                <div className="border-t bg-muted/50 px-4 py-2 text-center text-xs text-muted-foreground">
-                  Showing 10 of {parsedData.length} devices
+                    </thead>
+                    <tbody className="divide-y">
+                      {parsedImport.rows.slice(0, 10).map((row, index) => (
+                        <tr key={index} className="hover:bg-muted/50">
+                          <td className="px-4 py-2 font-mono text-xs">
+                            {row["DeviceID"]}
+                          </td>
+                          <td className="px-4 py-2">{row["Customer"]}</td>
+                          <td className="px-4 py-2">{row["Model"]}</td>
+                          <td className="px-4 py-2">
+                            <div className="flex gap-2">
+                              <Badge variant="outline" className="text-xs">
+                                K: {row["Black"]}%
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                C: {row["Cyan"]}%
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                M: {row["Magenta"]}%
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                Y: {row["Yellow"]}%
+                              </Badge>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-            </div>
+                {parsedImport.rows.length > 10 && (
+                  <div className="bg-muted/50 text-muted-foreground border-t px-4 py-2 text-center text-xs">
+                    Showing 10 of {parsedImport.rows.length} rows
+                  </div>
+                )}
+              </div>
+            )}
+
+            {parsedImport.type === "latest_total" && (
+              <div className="rounded-lg border">
+                <div className="max-h-64 overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted sticky top-0">
+                      <tr>
+                        <th className="px-4 py-2 text-left font-medium">Device ID</th>
+                        <th className="px-4 py-2 text-left font-medium">Customer</th>
+                        <th className="px-4 py-2 text-left font-medium">Server Date</th>
+                        <th className="px-4 py-2 text-left font-medium">Total</th>
+                        <th className="px-4 py-2 text-left font-medium">Copy Total</th>
+                        <th className="px-4 py-2 text-left font-medium">Printer Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {parsedImport.rows.slice(0, 10).map((row, index) => (
+                        <tr key={index} className="hover:bg-muted/50">
+                          <td className="px-4 py-2 font-mono text-xs">
+                            {row["DeviceID"]}
+                          </td>
+                          <td className="px-4 py-2">{row["Customer"]}</td>
+                          <td className="px-4 py-2">{row["Server received date"]}</td>
+                          <td className="px-4 py-2">{row["Total"]}</td>
+                          <td className="px-4 py-2">{row["Copy:Total"]}</td>
+                          <td className="px-4 py-2">{row["Printer:Total"]}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {parsedImport.rows.length > 10 && (
+                  <div className="bg-muted/50 text-muted-foreground border-t px-4 py-2 text-center text-xs">
+                    Showing 10 of {parsedImport.rows.length} rows
+                  </div>
+                )}
+              </div>
+            )}
+
+            {parsedImport.type === "warning_history" && (
+              <div className="rounded-lg border">
+                <div className="max-h-64 overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted sticky top-0">
+                      <tr>
+                        <th className="px-4 py-2 text-left font-medium">Device ID</th>
+                        <th className="px-4 py-2 text-left font-medium">Code</th>
+                        <th className="px-4 py-2 text-left font-medium">Warning</th>
+                        <th className="px-4 py-2 text-left font-medium">Server Date</th>
+                        <th className="px-4 py-2 text-left font-medium">Recovered</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {parsedImport.rows.slice(0, 10).map((row, index) => (
+                        <tr key={index} className="hover:bg-muted/50">
+                          <td className="px-4 py-2 font-mono text-xs">
+                            {row["DeviceID"]}
+                          </td>
+                          <td className="px-4 py-2">{row["Code"]}</td>
+                          <td className="px-4 py-2">{row["Warning Contents"]}</td>
+                          <td className="px-4 py-2">{row["Server received date"]}</td>
+                          <td className="px-4 py-2">{row["Recovered"]}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {parsedImport.rows.length > 10 && (
+                  <div className="bg-muted/50 text-muted-foreground border-t px-4 py-2 text-center text-xs">
+                    Showing 10 of {parsedImport.rows.length} rows
+                  </div>
+                )}
+              </div>
+            )}
+
+            {parsedImport.type === "consumable_events" && (
+              <div className="rounded-lg border">
+                <div className="max-h-64 overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted sticky top-0">
+                      <tr>
+                        <th className="px-4 py-2 text-left font-medium">Device ID</th>
+                        <th className="px-4 py-2 text-left font-medium">Type</th>
+                        <th className="px-4 py-2 text-left font-medium">Warning Code</th>
+                        <th className="px-4 py-2 text-left font-medium">Description</th>
+                        <th className="px-4 py-2 text-left font-medium">Status</th>
+                        <th className="px-4 py-2 text-left font-medium">TC</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {parsedImport.rows.slice(0, 10).map((row, index) => (
+                        <tr key={index} className="hover:bg-muted/50">
+                          <td className="px-4 py-2 font-mono text-xs">
+                            {row["DeviceID"]}
+                          </td>
+                          <td className="px-4 py-2">{row["Type"]}</td>
+                          <td className="px-4 py-2">{row["Warning Code"]}</td>
+                          <td className="px-4 py-2">{row["Description"]}</td>
+                          <td className="px-4 py-2">{row["Status"]}</td>
+                          <td className="px-4 py-2">{row["TC"]}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {parsedImport.rows.length > 10 && (
+                  <div className="bg-muted/50 text-muted-foreground border-t px-4 py-2 text-center text-xs">
+                    Showing 10 of {parsedImport.rows.length} rows
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex gap-2">
-              <Button onClick={handleUpload} disabled={status === "uploading"} className="flex-1">
+              <Button
+                onClick={handleUpload}
+                disabled={status === "uploading"}
+                className="flex-1"
+              >
                 {status === "uploading" ? "Uploading..." : "Upload to Database"}
               </Button>
-              <Button variant="outline" onClick={resetState} disabled={status === "uploading"}>
+              <Button
+                variant="outline"
+                onClick={resetState}
+                disabled={status === "uploading"}
+              >
                 Cancel
               </Button>
             </div>
+
+            {status === "uploading" && uploadProgress && (
+              <p className="text-muted-foreground text-right text-xs">
+                Uploading chunk {uploadProgress.completed} of {uploadProgress.total}…
+              </p>
+            )}
           </div>
         )}
 
         {status === "success" && uploadResult && (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
             <div className="flex items-start gap-3">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5" />
+              <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" />
               <div className="flex-1">
                 <p className="font-medium text-emerald-900">Upload Successful</p>
                 <p className="mt-1 text-sm text-emerald-700">
-                  Successfully processed {uploadResult.success} device{uploadResult.success !== 1 ? "s" : ""}.
-                  {uploadResult.errors > 0 && ` ${uploadResult.errors} error${uploadResult.errors !== 1 ? "s" : ""} occurred.`}
+                  Successfully processed {uploadResult.success} device
+                  {uploadResult.success !== 1 ? "s" : ""}.
+                  {uploadResult.errors > 0 &&
+                    ` ${uploadResult.errors} error${uploadResult.errors !== 1 ? "s" : ""} occurred.`}
                 </p>
                 <Button variant="outline" size="sm" onClick={resetState} className="mt-3">
                   Upload Another File
                 </Button>
               </div>
             </div>
+            {uploadResult.errorDetails.length > 0 && (
+              <div className="mt-3 rounded border border-emerald-200 bg-white/60 p-3">
+                <p className="text-xs font-medium text-emerald-900">
+                  Notes from Supabase (showing up to {uploadResult.errorDetails.length}{" "}
+                  issues):
+                </p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-xs text-emerald-800">
+                  {uploadResult.errorDetails.map((detail, index) => (
+                    <li key={index}>{detail}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
         {error && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+          <div className="border-destructive/50 bg-destructive/10 rounded-lg border p-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
+              <AlertCircle className="text-destructive mt-0.5 h-5 w-5" />
               <div className="flex-1">
-                <p className="font-medium text-destructive">Error</p>
-                <p className="mt-1 text-sm text-destructive/90">{error}</p>
+                <p className="text-destructive font-medium">Error</p>
+                <p className="text-destructive/90 mt-1 text-sm">{error}</p>
                 <Button variant="outline" size="sm" onClick={resetState} className="mt-3">
                   Try Again
                 </Button>
