@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseServiceClient } from "@/lib/supabase/service";
 
 type WarningAction = "none" | "mute" | "unmute";
 
@@ -10,6 +10,7 @@ type BulkRequest = {
   serialNumbers?: string[];
   thresholds?: ThresholdPayload;
   warningAction?: WarningAction;
+  automationAction?: "leave" | "enable" | "disable";
 };
 
 export async function POST(request: Request) {
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
         ? body.serialNumbers
         : deviceIds;
 
-    const supabase = await getSupabaseServerClient();
+    const supabase = getSupabaseServiceClient();
     const now = new Date().toISOString();
 
     const trimmedSerials = serialNumbers
@@ -78,40 +79,50 @@ export async function POST(request: Request) {
         ? Math.min(Math.max(Math.round(value), 0), 100)
         : 15;
 
+    const automationAction =
+      body.automationAction === "enable" || body.automationAction === "disable"
+        ? body.automationAction
+        : "leave";
+
+    let thresholdsProvided = false;
+    let thresholdTemplate: Record<string, number> | null = null;
+
     if (body.thresholds && typeof body.thresholds === "object") {
+      thresholdsProvided = true;
       const raw = body.thresholds as ThresholdPayload;
-      const thresholds = {
+      thresholdTemplate = {
         black_threshold: sanitize(raw.black ?? 15),
         cyan_threshold: sanitize(raw.cyan ?? 15),
         magenta_threshold: sanitize(raw.magenta ?? 15),
         yellow_threshold: sanitize(raw.yellow ?? 15),
         special_color_threshold: sanitize(raw.black ?? 15),
-        alerts_enabled: true,
-        black_enabled: true,
-        cyan_enabled: true,
-        magenta_enabled: true,
-        yellow_enabled: true,
       };
+    }
 
-      if (thresholds.black_threshold === null) {
-        thresholds.black_threshold = 15;
-      }
-      if (thresholds.cyan_threshold === null) {
-        thresholds.cyan_threshold = 15;
-      }
-      if (thresholds.magenta_threshold === null) {
-        thresholds.magenta_threshold = 15;
-      }
-      if (thresholds.yellow_threshold === null) {
-        thresholds.yellow_threshold = 15;
-      }
-      if (thresholds.special_color_threshold === null) {
-        thresholds.special_color_threshold = thresholds.black_threshold;
-      }
+    if (thresholdsProvided || automationAction !== "leave") {
+      const automationFields =
+        automationAction === "enable"
+          ? {
+              alerts_enabled: true,
+              black_enabled: true,
+              cyan_enabled: true,
+              magenta_enabled: true,
+              yellow_enabled: true,
+            }
+          : automationAction === "disable"
+            ? {
+                alerts_enabled: false,
+                black_enabled: false,
+                cyan_enabled: false,
+                magenta_enabled: false,
+                yellow_enabled: false,
+              }
+            : {};
 
       const upsertRows = validRecords.map((record) => ({
         device_id: record.deviceId as string,
-        ...thresholds,
+        ...(thresholdTemplate ?? {}),
+        ...automationFields,
         updated_at: now,
       }));
 
@@ -181,4 +192,6 @@ export async function POST(request: Request) {
     );
   }
 }
+
+
 
