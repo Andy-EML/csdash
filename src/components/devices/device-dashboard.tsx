@@ -1,480 +1,1506 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
-import { Eye, FileText, Palette, Printer, Settings } from "lucide-react";
-import type { DeviceRow, TonerKey } from "@/lib/database.types";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { cn, formatRelativeTime } from "@/lib/utils";
-import { TonerBar } from "@/components/ui/toner-bar";
-import { Badge } from "@/components/ui/badge";
+import { useRouter } from "next/navigation";
+import {
+  DeviceCard,
+  type DeviceStatusMeta,
+  type TonerSnapshot,
+  type SupplyScope,
+  type WarningScope,
+} from "@/components/devices/device-card";
+import {
+  computeDeviceStatus,
+  computeMutedScopes,
+  computeTonerSnapshots,
+  getDeviceLastUpdatedIso,
+  DEFAULT_TONER_THRESHOLD,
+  type DeviceStatus,
+} from "./device-dashboard-helpers";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { IconUpload } from "@/components/ui/icons";
+import { formatRelativeTime, cn } from "@/lib/utils";
+import type {
+  DeviceAlertSettingsRow,
+  DeviceWarningOverrideRow,
+  GasGageRow,
+} from "@/lib/database.types";
+import type { DeviceOrderPayload } from "@/lib/orders/create-supply-order";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
+import { Filter, Search } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 
-const TONER_FIELD_MAP: Record<TonerKey, keyof DeviceRow> = {
-  k: "toner_k_percent",
-  c: "toner_c_percent",
-  m: "toner_m_percent",
-  y: "toner_y_percent",
+type StatusFilter = DeviceStatus | "all";
+
+type DevicesDashboardProps = {
+  devices: GasGageRow[];
+  alertSettings: DeviceAlertSettingsRow[];
+  warningOverrides: DeviceWarningOverrideRow[];
+  activeOrderDeviceIds: string[];
+  activeOrders: Array<{
+    device_id: string;
+    status: string;
+    toner_color: string | null;
+    order_type: string | null;
+    ordered_at: string | null;
+  }>;
+  ordersError?: string;
+  settingsError?: string;
+  overridesError?: string;
+  renderedAt: number;
 };
 
-const TONER_CONFIG: Array<{ key: TonerKey; label: string; color: string }> = [
-  { key: "k", label: "K", color: "#111827" },
-  { key: "c", label: "C", color: "#0ea5e9" },
-  { key: "m", label: "M", color: "#d946ef" },
-  { key: "y", label: "Y", color: "#f59e0b" },
-];
-
-const WARNING_VARIANTS: Array<{
-  match: RegExp;
-  className: string;
-  icon: string;
-}> = [
-  { match: /waste toner/i, className: "bg-red-100 text-red-700", icon: "waste" },
-  { match: /(low|near empty|empty).*toner/i, className: "bg-amber-100 text-amber-700", icon: "toner" },
-  { match: /jam/i, className: "bg-purple-100 text-purple-700", icon: "jam" },
-  { match: /parts|unit|drum/i, className: "bg-sky-100 text-sky-700", icon: "parts" },
-];
-
-type DeviceStatus = "critical" | "warning" | "ok";
-type Density = "compact" | "comfortable" | "spacious";
-type Filter = "all" | "issues" | "warnings" | "waste";
-
-type DeviceView = {
-  device: DeviceRow;
-  warnings: string[];
+type EnrichedDevice = {
+  device: GasGageRow;
+  tonerLevels: TonerSnapshot[];
   status: DeviceStatus;
-  tonerValues: Array<{ key: TonerKey; label: string; color: string; value: number | null }>;
-  wasteValue: number | null;
-  wasteWarning: string | null;
-  issueCount: number;
-  lowCount: number;
+  statusMeta: DeviceStatusMeta;
+  lastUpdatedLabel: string;
+  mutedScopes: WarningScope[];
+  canDismiss: boolean;
+  canRestore: boolean;
+  hasActiveOrder: boolean;
+  needsAttention: boolean;
 };
 
-const STATUS_META: Record<DeviceStatus, { dot: string; badgeClass: string; summary: string }> = {
-  critical: { dot: "bg-destructive", badgeClass: "bg-destructive/10 text-destructive", summary: "Critical" },
-  warning: { dot: "bg-amber-500", badgeClass: "bg-amber-100 text-amber-700", summary: "Warning" },
-  ok: { dot: "bg-emerald-500", badgeClass: "bg-emerald-100 text-emerald-700", summary: "OK" },
+type AttentionFilter = "needs_attention" | "active_orders" | "all";
+
+const STATUS_META: Record<DeviceStatus, DeviceStatusMeta & { tone: string }> = {
+  critical: {
+    label: "Critical",
+    accentClass: "from-red-500 via-rose-500 to-pink-500",
+    badgeClass: "border-red-400 bg-red-50 text-red-600 dark:border-red-500/70 dark:bg-red-500/15 dark:text-red-200",
+    tone: "text-red-600 dark:text-red-300",
+  },
+  warning: {
+    label: "Warning",
+    accentClass: "from-amber-400 via-amber-500 to-orange-500",
+    badgeClass: "border-amber-400 bg-amber-50 text-amber-600 dark:border-amber-500/70 dark:bg-amber-500/15 dark:text-amber-200",
+    tone: "text-amber-600 dark:text-amber-200",
+  },
+  ok: {
+    label: "OK",
+    accentClass: "from-emerald-400 via-emerald-500 to-teal-500",
+    badgeClass: "border-emerald-400 bg-emerald-50 text-emerald-600 dark:border-emerald-500/70 dark:bg-emerald-500/15 dark:text-emerald-200",
+    tone: "text-emerald-600 dark:text-emerald-200",
+  },
 };
 
-const GROUP_META: Array<{ key: DeviceStatus; label: string; description: string }> = [
-  { key: "critical", label: "🔴 Critical", description: "Needs immediate action" },
-  { key: "warning", label: "🟡 Warnings", description: "Monitor soon" },
-  { key: "ok", label: "🟢 OK", description: "Healthy devices" },
+const STATUS_ORDER: Record<DeviceStatus, number> = {
+  critical: 0,
+  warning: 1,
+  ok: 2,
+};
+
+const ROW_ESTIMATE = 560;
+const VIRTUAL_THRESHOLD = 9;
+
+const ORDER_SCOPE_LABEL: Record<SupplyScope, string> = {
+  black: "Black toner",
+  cyan: "Cyan toner",
+  magenta: "Magenta toner",
+  yellow: "Yellow toner",
+  waste: "Waste toner",
+};
+
+const ATTENTION_FILTER_OPTIONS: Array<{
+  value: AttentionFilter;
+  label: string;
+}> = [
+  { value: "needs_attention", label: "Needs action" },
+  { value: "active_orders", label: "Active orders" },
+  { value: "all", label: "All devices" },
 ];
 
-const DENSITY_ROW: Record<Density, string> = {
-  compact: "space-y-2 py-3",
-  comfortable: "space-y-3 py-4",
-  spacious: "space-y-4 py-5",
+type ThresholdMap = Record<"black" | "cyan" | "magenta" | "yellow", number>;
+
+const DEFAULT_THRESHOLD_MAP: ThresholdMap = {
+  black: DEFAULT_TONER_THRESHOLD,
+  cyan: DEFAULT_TONER_THRESHOLD,
+  magenta: DEFAULT_TONER_THRESHOLD,
+  yellow: DEFAULT_TONER_THRESHOLD,
 };
 
-const FILTER_OPTIONS: Array<{ value: Filter; label: string }> = [
-  { value: "all", label: "All" },
-  { value: "issues", label: "Show issues" },
-  { value: "warnings", label: "Warnings" },
-  { value: "waste", label: "Waste" },
+const COLOR_INPUTS: Array<{ key: keyof ThresholdMap; label: string }> = [
+  { key: "black", label: "Black" },
+  { key: "cyan", label: "Cyan" },
+  { key: "magenta", label: "Magenta" },
+  { key: "yellow", label: "Yellow" },
 ];
 
-const DENSITY_OPTIONS: Array<{ value: Density; label: string }> = [
-  { value: "compact", label: "Compact" },
-  { value: "comfortable", label: "Comfort" },
-  { value: "spacious", label: "Spacious" },
+const ORDER_SCOPE_OPTIONS: Array<{ value: SupplyScope; label: string }> = [
+  { value: "black", label: ORDER_SCOPE_LABEL.black },
+  { value: "cyan", label: ORDER_SCOPE_LABEL.cyan },
+  { value: "magenta", label: ORDER_SCOPE_LABEL.magenta },
+  { value: "yellow", label: ORDER_SCOPE_LABEL.yellow },
+  { value: "waste", label: ORDER_SCOPE_LABEL.waste },
 ];
 
-export type DevicesDashboardProps = {
-  initialDevices: DeviceRow[];
-  activeOrderDeviceIds?: string[];
-};
+export function DevicesDashboard({
+  devices,
+  alertSettings,
+  warningOverrides,
+  activeOrderDeviceIds,
+  activeOrders,
+  ordersError,
+  settingsError,
+  overridesError,
+  renderedAt,
+}: DevicesDashboardProps) {
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const router = useRouter();
+  const { toast } = useToast();
 
-type DeviceChangePayload = {
-  eventType: "INSERT" | "UPDATE" | "DELETE";
-  new: DeviceRow | null;
-  old: DeviceRow | null;
-};
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [pendingDismiss, setPendingDismiss] = useState<string | null>(null);
+  const [pendingOrder, setPendingOrder] = useState<string | null>(null);
+  const [columns, setColumns] = useState(1);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedDevices, setSelectedDevices] = useState<
+    Record<string, { deviceId: string | null }>
+  >({});
+  const [bulkThresholds, setBulkThresholds] = useState<ThresholdMap>(
+    () => ({ ...DEFAULT_THRESHOLD_MAP })
+  );
+  const [warningAction, setWarningAction] =
+    useState<"none" | "mute" | "unmute">("none");
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkOrderScope, setBulkOrderScope] = useState<SupplyScope>("black");
+  const [bulkOrderLoading, setBulkOrderLoading] = useState(false);
+  const [attentionFilter, setAttentionFilter] =
+    useState<AttentionFilter>("needs_attention");
 
-export function DevicesDashboard({ initialDevices, activeOrderDeviceIds = [] }: DevicesDashboardProps) {
-  const [devices, setDevices] = useState<DeviceRow[]>(() => normalizeDevices(initialDevices));
-  const [density, setDensity] = useState<Density>("compact");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<DeviceStatus, boolean>>({
-    critical: false,
-    warning: false,
-    ok: false,
-  });
+  const activeColumns = selectionMode ? 1 : columns;
+
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const parentRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setDevices(normalizeDevices(initialDevices));
-  }, [initialDevices]);
-
-  useEffect(() => {
-    const supabase = getSupabaseBrowserClient();
-    const channel = supabase
-      .channel("public:devices-dashboard")
-      .on(
-        "postgres_changes",
-        { schema: "public", table: "devices", event: "*" },
-        (payload) => {
-          const change = payload as unknown as DeviceChangePayload;
-          setDevices((previous) => {
-            const next = new Map(previous.map((device) => [device.serial_number, device] as const));
-            if (change.eventType === "DELETE" && change.old) {
-              next.delete(change.old.serial_number);
-            }
-            if (change.new) {
-              next.set(change.new.serial_number, change.new);
-            }
-            return normalizeDevices(Array.from(next.values()));
-          });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
+    const updateColumns = () => {
+      const width = window.innerWidth;
+      const next = width >= 1280 ? 3 : width >= 768 ? 2 : 1;
+      setColumns((prev) => (prev === next ? prev : next));
     };
+
+    updateColumns();
+    window.addEventListener("resize", updateColumns);
+    return () => window.removeEventListener("resize", updateColumns);
   }, []);
 
-  const activeSet = useMemo(() => new Set(activeOrderDeviceIds), [activeOrderDeviceIds]);
+  const devicesBySerial = useMemo(() => {
+    const map = new Map<string, GasGageRow>();
+    for (const device of devices) {
+      if (device.serial_number) {
+        map.set(device.serial_number.trim(), device);
+      }
+    }
+    return map;
+  }, [devices]);
 
-  const filteredDevices = useMemo(() => {
-    return devices.filter((device) => {
-      if (activeSet.has(device.serial_number)) {
-        return false;
+  const selectedEntries = useMemo(
+    () => Object.entries(selectedDevices),
+    [selectedDevices]
+  );
+  const selectedCount = selectedEntries.length;
+  const hasSelection = selectedCount > 0;
+  const isBulkBusy = bulkLoading || bulkOrderLoading;
+
+  const toggleSelectionMode = useCallback(() => {
+    setSelectionMode((prev) => {
+      const next = !prev;
+      if (next) {
+        setBulkThresholds({ ...DEFAULT_THRESHOLD_MAP });
+        setBulkOrderScope("black");
+      } else {
+        setSelectedDevices({});
+        setWarningAction("none");
+        setBulkThresholds({ ...DEFAULT_THRESHOLD_MAP });
+        setBulkOrderScope("black");
       }
-      const warnings = extractWarnings(device.warning_message);
-      const hasWaste = warnings.some((warning) => /waste toner/i.test(warning));
-      const hasLow = hasLowToner(device);
-      if (filter === "issues") {
-        return warnings.length > 0 || hasLow;
-      }
-      if (filter === "warnings") {
-        return warnings.length > 0;
-      }
-      if (filter === "waste") {
-        return hasWaste;
-      }
-      return true;
+      return next;
     });
-  }, [devices, activeSet, filter]);
+  }, []);
 
-  const deviceViews = useMemo<DeviceView[]>(() => {
-    return filteredDevices.map((device) => {
-      const warningSet = new Set(extractWarnings(device.warning_message));
-      const tonerValues = TONER_CONFIG.map(({ key, label, color }) => {
-        const value = sanitizeValue(device[TONER_FIELD_MAP[key]]);
-        if (value !== null) {
-          if (value < 20) {
-            warningSet.add(`Low toner (${label})`);
-          } else if (value < 50) {
-            warningSet.add(`Moderate toner (${label})`);
-          }
-        }
-        return { key, label, color, value };
-      });
-      const wasteValue = sanitizeValue(device.waste_toner_percent);
-      let wasteWarning: string | null = null;
-      if (wasteValue !== null && wasteValue >= 95) {
-        wasteWarning = `Waste ${Math.round(wasteValue)}%`;
-        warningSet.add(wasteWarning);
+  const updateThresholdValue = useCallback((color: keyof ThresholdMap, value: number) => {
+    setBulkThresholds((previous) => ({
+      ...previous,
+      [color]: value,
+    }));
+  }, []);
+
+  const handleToggleDeviceSelection = useCallback(
+    (device: GasGageRow, nextSelected: boolean) => {
+      if (!device.serial_number) {
+        return;
       }
-      const warnings = Array.from(warningSet);
-      const lowCount = tonerValues.filter((item) => typeof item.value === "number" && item.value < 20).length;
-      const status: DeviceStatus = warnings.some((warning) => /waste|low|empty/i.test(warning))
-        ? "critical"
-        : warnings.length > 0
-        ? "warning"
-        : "ok";
+      setSelectedDevices((previous) => {
+        const next = { ...previous };
+        if (nextSelected) {
+          next[device.serial_number] = {
+            deviceId: device.device_id ?? device.serial_number,
+          };
+        } else {
+          delete next[device.serial_number];
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  const clearSelection = useCallback(() => {
+    setSelectedDevices({});
+    setWarningAction("none");
+    setBulkThresholds({ ...DEFAULT_THRESHOLD_MAP });
+    setBulkOrderScope("black");
+  }, []);
+
+  const applyBulkChanges = useCallback(async () => {
+    const entries = Object.entries(selectedDevices);
+    if (entries.length === 0) {
+      toast({
+        title: "No devices selected",
+        description: "Select at least one device to manage alerts.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const sanitize = (value: number) =>
+      Number.isFinite(value) ? Math.min(Math.max(Math.round(value), 0), 100) : 15;
+    const sanitizedThresholds: ThresholdMap = {
+      black: sanitize(bulkThresholds.black),
+      cyan: sanitize(bulkThresholds.cyan),
+      magenta: sanitize(bulkThresholds.magenta),
+      yellow: sanitize(bulkThresholds.yellow),
+    };
+
+    setBulkLoading(true);
+    try {
+      const { deviceIds, serialNumbers } = entries.reduce(
+        (acc, [serial, value]) => {
+          const trimmedSerial = serial.trim();
+          const resolvedId = value.deviceId?.trim() ?? "";
+          if (resolvedId.length > 0) {
+            acc.deviceIds.push(resolvedId);
+            acc.serialNumbers.push(trimmedSerial);
+          }
+          return acc;
+        },
+        { deviceIds: [] as string[], serialNumbers: [] as string[] }
+      );
+
+      if (deviceIds.length === 0) {
+        throw new Error(
+          "No selected devices have valid device IDs. Please pick devices that exist in Supabase."
+        );
+      }
+
+      const body: {
+        deviceIds: string[];
+        serialNumbers: string[];
+        thresholds: ThresholdMap;
+        warningAction?: "none" | "mute" | "unmute";
+      } = {
+        deviceIds,
+        serialNumbers,
+        thresholds: sanitizedThresholds,
+      };
+
+      if (warningAction !== "none") {
+        body.warningAction = warningAction;
+      }
+
+      const response = await fetch("/api/device-alert-settings/bulk", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to update alert settings.");
+      }
+
+      const skippedCount = typeof payload?.skipped === "number" ? payload.skipped : 0;
+      const appliedCount = Math.max(entries.length - skippedCount, 0);
+
+      toast({
+        title: "Alerts updated",
+        description:
+          appliedCount > 0
+            ? `Applied changes to ${appliedCount} device${appliedCount === 1 ? "" : "s"}.`
+            : "No devices were updated.",
+      });
+
+      if (skippedCount > 0) {
+        toast({
+          title: "Some devices were skipped",
+          description: `${skippedCount} device${skippedCount === 1 ? " was" : "s were"} not updated because Supabase does not contain a matching device ID.`,
+        });
+      }
+
+      if (skippedCount === 0) {
+        setSelectedDevices({});
+        setWarningAction("none");
+        setBulkThresholds({ ...DEFAULT_THRESHOLD_MAP });
+        setSelectionMode(false);
+        router.refresh();
+      } else {
+        setBulkThresholds({ ...DEFAULT_THRESHOLD_MAP });
+      }
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Unable to update alerts",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Something went wrong while applying changes.",
+        variant: "destructive",
+      });
+    } finally {
+      setBulkLoading(false);
+    }
+  }, [selectedDevices, bulkThresholds, warningAction, router, toast]);
+
+  const settingsByDevice = useMemo(() => {
+    const map = new Map<string, DeviceAlertSettingsRow>();
+    for (const setting of alertSettings) {
+      if (setting.device_id) {
+        map.set(setting.device_id, setting);
+      }
+    }
+    return map;
+  }, [alertSettings]);
+
+  const overridesBySerial = useMemo(() => {
+    const map = new Map<string, DeviceWarningOverrideRow[]>();
+    for (const override of warningOverrides) {
+      const key = override.serial_number;
+      const list = map.get(key) ?? [];
+      list.push(override);
+      map.set(key, list);
+    }
+    return map;
+  }, [warningOverrides]);
+
+  const activeOrderSet = useMemo(
+    () => new Set(activeOrderDeviceIds.filter(Boolean)),
+    [activeOrderDeviceIds]
+  );
+
+  // Map orders by device and toner color
+  const ordersByDevice = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const order of activeOrders) {
+      const key = order.device_id?.trim();
+      if (!key) {
+        continue;
+      }
+      const colors = map.get(key) ?? new Set<string>();
+      if (order.toner_color) {
+        colors.add(order.toner_color);
+      } else if (order.order_type === "waste_toner") {
+        colors.add("waste");
+      } else {
+        colors.add("waste");
+      }
+      map.set(key, colors);
+    }
+    return map;
+  }, [activeOrders]);
+
+  const bulkOrderAnalysis = useMemo(() => {
+    const eligible: DeviceOrderPayload[] = [];
+    let conflictCount = 0;
+    let missingCount = 0;
+
+    const scopeKeyValue = bulkOrderScope === "waste" ? "waste" : bulkOrderScope;
+
+    for (const [serial, meta] of selectedEntries) {
+      const trimmedSerial = serial.trim();
+      if (!trimmedSerial) {
+        missingCount += 1;
+        continue;
+      }
+      const device = devicesBySerial.get(trimmedSerial);
+      if (!device) {
+        missingCount += 1;
+        continue;
+      }
+
+      const keysToCheck = new Set<string>();
+      keysToCheck.add(trimmedSerial);
+      if (meta.deviceId) {
+        keysToCheck.add(meta.deviceId.trim());
+      }
+      if (device.device_id) {
+        keysToCheck.add(device.device_id.trim());
+      }
+
+      let hasExisting = false;
+      for (const key of keysToCheck) {
+        if (!key) continue;
+        const scopes = ordersByDevice.get(key);
+        if (scopes?.has(scopeKeyValue)) {
+          hasExisting = true;
+          break;
+        }
+      }
+
+      if (hasExisting) {
+        conflictCount += 1;
+        continue;
+      }
+
+      eligible.push({
+        serial_number: device.serial_number,
+        device_id: meta.deviceId ?? device.device_id ?? device.serial_number,
+        customer: device.customer,
+        model: device.model,
+        device_location: device.device_location,
+        latest_receive_date: device.latest_receive_date,
+        updated_at: device.updated_at,
+        created_at: device.created_at,
+        black: device.black,
+        cyan: device.cyan,
+        magenta: device.magenta,
+        yellow: device.yellow,
+      });
+    }
+
+    return {
+      eligible,
+      conflictCount,
+      missingCount,
+    };
+  }, [selectedEntries, devicesBySerial, ordersByDevice, bulkOrderScope]);
+
+  const handleBulkOrderCreate = useCallback(async () => {
+    if (!hasSelection) {
+      toast({
+        title: "No devices selected",
+        description: "Select at least one device to create supply orders.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const eligibleDevices = bulkOrderAnalysis.eligible;
+    if (eligibleDevices.length === 0) {
+      const message =
+        bulkOrderAnalysis.conflictCount > 0
+          ? "All selected devices already have an active order for this supply."
+          : "Selected devices are missing serial numbers required to create orders.";
+      toast({
+        title: "No eligible devices",
+        description: message,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setBulkOrderLoading(true);
+    try {
+      const response = await fetch("/api/orders/bulk", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          scope: bulkOrderScope,
+          devices: eligibleDevices,
+          skipExisting: true,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to create supply orders.");
+      }
+
+      const createdCount =
+        typeof payload?.created === "number" ? payload.created : eligibleDevices.length;
+      const skippedExisting =
+        typeof payload?.skippedDueToExisting === "number" ? payload.skippedDueToExisting : 0;
+      const skippedMissing =
+        typeof payload?.skippedDueToMissingSerial === "number"
+          ? payload.skippedDueToMissingSerial
+          : 0;
+      const skippedDuplicates =
+        typeof payload?.skippedDueToDuplicates === "number"
+          ? payload.skippedDueToDuplicates
+          : 0;
+      const errorMessages: string[] = Array.isArray(payload?.errors) ? payload.errors : [];
+
+      if (createdCount > 0) {
+        toast({
+          title: "Orders created",
+          description: `Created ${createdCount} supply order${
+            createdCount === 1 ? "" : "s"
+          } for the selected devices.`,
+        });
+      }
+
+      if (skippedExisting > 0) {
+        toast({
+          title: "Active orders detected",
+          description: `${skippedExisting} device${
+            skippedExisting === 1 ? " already has" : "s already have"
+          } an open order for ${ORDER_SCOPE_LABEL[bulkOrderScope].toLowerCase()}. They were skipped.`,
+        });
+      }
+
+      if (skippedMissing > 0 || skippedDuplicates > 0) {
+        toast({
+          title: "Some devices were skipped",
+          description: [
+            skippedMissing > 0
+              ? `${skippedMissing} missing serial number${skippedMissing === 1 ? "" : "s"}`
+              : null,
+            skippedDuplicates > 0
+              ? `${skippedDuplicates} duplicate selection${skippedDuplicates === 1 ? "" : "s"}`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        });
+      }
+
+      if (errorMessages.length > 0) {
+        toast({
+          title: "Issues creating orders",
+          description: errorMessages.slice(0, 3).join(" "),
+          variant: "destructive",
+        });
+      }
+
+      if (createdCount > 0) {
+        router.refresh();
+        if (
+          errorMessages.length === 0 &&
+          skippedExisting === 0 &&
+          skippedMissing === 0 &&
+          skippedDuplicates === 0
+        ) {
+          clearSelection();
+          setSelectionMode(false);
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      toast({
+        title: "Unable to create orders",
+        description:
+          error instanceof Error ? error.message : "Something went wrong while creating orders.",
+        variant: "destructive",
+      });
+    } finally {
+      setBulkOrderLoading(false);
+    }
+  }, [
+    hasSelection,
+    bulkOrderAnalysis,
+    bulkOrderScope,
+    toast,
+    clearSelection,
+    router,
+  ]);
+
+  const enrichedDevices = useMemo<EnrichedDevice[]>(() => {
+    return devices.map((device) => {
+      const settings = device.device_id ? settingsByDevice.get(device.device_id) : undefined;
+      const deviceOverrides = overridesBySerial.get(device.serial_number ?? "") ?? [];
+      const mutedScopes = computeMutedScopes(device, deviceOverrides);
+      const combinedOrders = new Set<string>();
+      if (device.serial_number) {
+        const bySerial = ordersByDevice.get(device.serial_number);
+        bySerial?.forEach((value) => combinedOrders.add(value));
+      }
+      if (device.device_id) {
+        const byId = ordersByDevice.get(device.device_id);
+        byId?.forEach((value) => combinedOrders.add(value));
+      }
+
+      const deviceOrders = combinedOrders.size > 0 ? combinedOrders : undefined;
+      const tonerLevels = computeTonerSnapshots(device, settings, mutedScopes, deviceOrders);
+      const status = computeDeviceStatus(tonerLevels, mutedScopes);
+      const { label, accentClass, badgeClass } = STATUS_META[status];
+      const visualMeta: DeviceStatusMeta = { label, accentClass, badgeClass };
+      const lastUpdatedIso = getDeviceLastUpdatedIso(device);
+      const hasActiveOrder = combinedOrders.size > 0;
+      const needsAttention =
+        status !== "ok" &&
+        tonerLevels.some((level) => {
+          if (level.muted) {
+            return false;
+          }
+          const value = level.value;
+          const isAlerting =
+            value === null ||
+            value === 0 ||
+            (typeof value === "number" && value <= level.threshold);
+          return isAlerting && !level.hasActiveOrder;
+        });
+
       return {
         device,
-        warnings,
+        tonerLevels,
         status,
-        tonerValues,
-        wasteValue,
-        wasteWarning,
-        issueCount: warnings.length,
-        lowCount,
+        statusMeta: visualMeta,
+        lastUpdatedLabel: formatRelativeTime(lastUpdatedIso, renderedAt),
+        mutedScopes,
+        canDismiss:
+          status !== "ok" &&
+          !mutedScopes.includes("all") &&
+          device.serial_number !== null,
+        canRestore: mutedScopes.includes("all") && device.serial_number !== null,
+        hasActiveOrder,
+        needsAttention,
       };
     });
-  }, [filteredDevices]);
+  }, [devices, overridesBySerial, settingsByDevice, renderedAt, ordersByDevice]);
 
-  const grouped = useMemo(() => ({
-    critical: deviceViews.filter((view) => view.status === "critical"),
-    warning: deviceViews.filter((view) => view.status === "warning"),
-    ok: deviceViews.filter((view) => view.status === "ok"),
-  }), [deviceViews]);
+  const counts = useMemo(() => {
+    return enrichedDevices.reduce(
+      (acc, entry) => {
+        acc.total += 1;
+        acc[entry.status] += 1;
+        return acc;
+      },
+      { total: 0, critical: 0, warning: 0, ok: 0 }
+    );
+  }, [enrichedDevices]);
 
-  const counts = {
-    total: devices.length,
-    critical: grouped.critical.length,
-    warning: grouped.warning.length,
-    ok: grouped.ok.length,
+  const attentionCounts = useMemo(
+    () =>
+      enrichedDevices.reduce(
+        (acc, entry) => {
+          if (entry.needsAttention) {
+            acc.needsAttention += 1;
+          }
+          if (entry.hasActiveOrder) {
+            acc.activeOrders += 1;
+          }
+          return acc;
+        },
+        { needsAttention: 0, activeOrders: 0 }
+      ),
+    [enrichedDevices]
+  );
+
+  const filteredDevices = useMemo(() => {
+    const term = deferredSearchQuery.trim().toLowerCase();
+
+    return enrichedDevices
+      .filter((entry) => {
+        if (attentionFilter === "needs_attention" && !entry.needsAttention) {
+          return false;
+        }
+        if (attentionFilter === "active_orders" && !entry.hasActiveOrder) {
+          return false;
+        }
+        if (statusFilter !== "all" && entry.status !== statusFilter) {
+          return false;
+        }
+
+        if (!term) {
+          return true;
+        }
+
+        const haystack = [
+          entry.device.customer ?? "",
+          entry.device.model ?? "",
+          entry.device.serial_number ?? "",
+          entry.device.device_id ?? "",
+          entry.device.device_location ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        return haystack.includes(term);
+      })
+      .sort((a, b) => {
+        const byStatus = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+        if (byStatus !== 0) return byStatus;
+
+        const nameA = a.device.customer ?? "";
+        const nameB = b.device.customer ?? "";
+        return nameA.localeCompare(nameB);
+      });
+  }, [enrichedDevices, deferredSearchQuery, statusFilter, attentionFilter]);
+
+  const filterLabel =
+    statusFilter === "all" ? "All devices" : STATUS_META[statusFilter].label;
+
+  const attentionCountByFilter: Record<AttentionFilter, number> = {
+    needs_attention: attentionCounts.needsAttention,
+    active_orders: attentionCounts.activeOrders,
+    all: counts.total,
   };
 
-  const hiddenCount = devices.length - filteredDevices.length;
+  const rowCount = activeColumns > 0 ? Math.ceil(filteredDevices.length / activeColumns) : 0;
+
+  const rowVirtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_ESTIMATE,
+    overscan: 6,
+    measureElement: (el) => el?.getBoundingClientRect().height ?? ROW_ESTIMATE,
+  });
+
+  const useVirtual = !selectionMode && filteredDevices.length > VIRTUAL_THRESHOLD;
+
+  const measureRow = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node) {
+        rowVirtualizer.measureElement(node);
+      }
+    },
+    [rowVirtualizer]
+  );
+
+  useEffect(() => {
+    if (!useVirtual) {
+      return;
+    }
+    rowVirtualizer.measure();
+  }, [useVirtual, rowVirtualizer, rowCount, activeColumns]);
+
+  const handleDismissWarnings = useCallback(
+    async (device: GasGageRow) => {
+      if (!device.serial_number) {
+        toast({
+          title: "Unable to dismiss alerts",
+          description: "This device does not have a serial number associated yet.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setPendingDismiss(device.serial_number);
+      const timestamp = new Date().toISOString();
+      const { error } = await supabase.from("device_warning_overrides").upsert(
+        {
+          device_id: device.device_id ?? null,
+          serial_number: device.serial_number,
+          scope: "all",
+          dismissed_at: timestamp,
+          updated_at: timestamp,
+        },
+        { onConflict: "serial_number,scope" }
+      );
+
+      if (error) {
+        console.error(error);
+        toast({
+          title: "Failed to dismiss warnings",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Warnings dismissed",
+          description: "Alerts will re-appear when fresh telemetry is imported.",
+        });
+        router.refresh();
+      }
+
+      setPendingDismiss(null);
+    },
+    [router, supabase, toast]
+  );
+
+  const handleRestoreWarnings = useCallback(
+    async (device: GasGageRow) => {
+      if (!device.serial_number) {
+        return;
+      }
+      setPendingDismiss(device.serial_number);
+      const { error } = await supabase
+        .from("device_warning_overrides")
+        .delete()
+        .eq("serial_number", device.serial_number)
+        .eq("scope", "all");
+
+      if (error) {
+        console.error(error);
+        toast({
+          title: "Failed to restore warnings",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Warnings restored",
+          description: "Alerts will now be displayed for this device.",
+        });
+        router.refresh();
+      }
+
+      setPendingDismiss(null);
+    },
+    [router, supabase, toast]
+  );
+
+  const handleCreateSupplyOrder = useCallback(
+    async (device: GasGageRow, scope: SupplyScope) => {
+      if (!device.serial_number) {
+        toast({
+          title: "Unable to create order",
+          description: "Device serial number is required to log an order.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const key = `${device.serial_number}-${scope}`;
+      setPendingOrder(key);
+
+      const response = await fetch("/api/orders/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          scope,
+          device: {
+            serial_number: device.serial_number,
+            device_id: device.device_id,
+            customer: device.customer,
+            model: device.model,
+            device_location: device.device_location,
+            latest_receive_date: device.latest_receive_date,
+            updated_at: device.updated_at,
+            created_at: device.created_at,
+            black: device.black,
+            cyan: device.cyan,
+            magenta: device.magenta,
+            yellow: device.yellow,
+          },
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        console.error(payload);
+        toast({
+          title: "Order not created",
+          description:
+            payload?.error ?? "Failed to create supply order. Please try again.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Order logged",
+          description: `Created a ${
+            scope === "waste" ? "waste toner" : `${scope} toner`
+          } order for ${device.customer ?? device.serial_number}.`,
+        });
+        router.refresh();
+      }
+
+      setPendingOrder(null);
+    },
+    [router, toast]
+  );
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Devices</h1>
-          <p className="text-sm text-muted-foreground" suppressHydrationWarning>
-            Showing {filteredDevices.length} of {devices.length} devices{hiddenCount > 0 ? ` (${hiddenCount} hidden)` : ""}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <SegmentedControl options={FILTER_OPTIONS} value={filter} onChange={setFilter} />
-          <SegmentedControl options={DENSITY_OPTIONS} value={density} onChange={setDensity} />
-        </div>
-      </div>
+    <div className="border-border/50 from-background via-secondary/20 to-secondary/40 relative overflow-hidden rounded-3xl border bg-gradient-to-b">
+      <div className="from-primary/10 to-primary/10 absolute inset-x-0 top-0 h-32 bg-gradient-to-r via-transparent blur-3xl" />
+      <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-10 px-6 py-12 sm:px-8 lg:px-12">
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs font-medium tracking-wide uppercase">
+            <span className="border-border/60 bg-background/70 rounded-full border px-3 py-1">
+              Device overview
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button asChild className="gap-2">
+              <Link href="/devices/import">
+                <IconUpload className="h-4 w-4" />
+                Import latest CSV
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="gap-2">
+              <Link href="/orders">View open orders</Link>
+            </Button>
+          </div>
+        </header>
 
-      <div className="grid gap-3 sm:grid-cols-4">
-        <SummaryCard label="Devices" value={counts.total} />
-        <SummaryCard label="Critical" value={counts.critical} tone="destructive" />
-        <SummaryCard label="Warnings" value={counts.warning} tone="warning" />
-        <SummaryCard label="OK" value={counts.ok} tone="success" />
-      </div>
+        {(ordersError || settingsError || overridesError) && (
+          <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50/70 px-5 py-4 text-sm text-amber-900">
+            <p className="font-semibold">Heads up</p>
+            <ul className="list-inside list-disc space-y-1">
+              {ordersError ? (
+                <li>Orders data could not be refreshed: {ordersError}</li>
+              ) : null}
+              {settingsError ? (
+                <li>Alert settings may be stale: {settingsError}</li>
+              ) : null}
+              {overridesError ? (
+                <li>Warning overrides could not be loaded: {overridesError}</li>
+              ) : null}
+            </ul>
+          </div>
+        )}
 
-      <div className="space-y-3">
-        {GROUP_META.map((group) => {
-          const groupItems = grouped[group.key];
-          if (groupItems.length === 0) {
-            return null;
-          }
-          const collapsed = collapsedGroups[group.key];
-          return (
-            <div key={group.key} className="rounded-2xl border border-border bg-card shadow-sm">
-              <button
-                type="button"
-                onClick={() =>
-                  setCollapsedGroups((prev) => ({
-                    ...prev,
-                    [group.key]: !prev[group.key],
-                  }))
-                }
-                className="flex w-full items-center justify-between rounded-t-2xl border-b border-border bg-muted/40 px-4 py-3 text-left"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold">{group.label}</span>
-                  <Badge variant="outline" className="text-xs">
-                    {groupItems.length}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">{group.description}</span>
-                </div>
-                <span className="text-sm text-muted-foreground">{collapsed ? "Show" : "Hide"}</span>
-              </button>
-              {!collapsed && (
-                <div className="divide-y divide-border">
-                  {groupItems.map((view) => (
-                    <DeviceRow key={view.device.serial_number} view={view} density={density} />
-                  ))}
-                </div>
-              )}
+        <section className="grid gap-4 md:grid-cols-4">
+          <StatusCard
+            label="Total devices"
+            value={counts.total}
+            active={statusFilter === "all"}
+            tone="text-foreground"
+            onClick={() => setStatusFilter("all")}
+          />
+          <StatusCard
+            label="Critical"
+            value={counts.critical}
+            active={statusFilter === "critical"}
+            tone={STATUS_META.critical.tone}
+            onClick={() => setStatusFilter("critical")}
+          />
+          <StatusCard
+            label="Warning"
+            value={counts.warning}
+            active={statusFilter === "warning"}
+            tone={STATUS_META.warning.tone}
+            onClick={() => setStatusFilter("warning")}
+          />
+          <StatusCard
+            label="Healthy"
+            value={counts.ok}
+            active={statusFilter === "ok"}
+            tone={STATUS_META.ok.tone}
+            onClick={() => setStatusFilter("ok")}
+          />
+        </section>
+
+        <section className="border-border/60 bg-card/70 flex flex-col gap-4 rounded-2xl border p-6 shadow-sm backdrop-blur">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+            <div className="relative flex-1">
+              <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search by customer, model, serial, or device ID..."
+                className="border-border h-11 rounded-xl bg-transparent pl-10"
+              />
             </div>
-          );
-        })}
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="h-11 gap-2 rounded-xl">
+                    <Filter className="h-4 w-4" />
+                    {filterLabel}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => setStatusFilter("all")}>
+                    All devices
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter("critical")}>
+                    Critical only
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter("warning")}>
+                    Warning only
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setStatusFilter("ok")}>
+                    Healthy only
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant={selectionMode ? "secondary" : "outline"}
+                className="h-11 rounded-xl"
+                onClick={toggleSelectionMode}
+              >
+                {selectionMode ? "Close bulk actions" : "Bulk actions"}
+              </Button>
+              <Badge variant="outline" className="w-fit rounded-full px-4 py-1">
+                Showing {filteredDevices.length} of {counts.total} devices
+              </Badge>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {ATTENTION_FILTER_OPTIONS.map((option) => {
+              const count = attentionCountByFilter[option.value];
+              return (
+                <Button
+                  key={option.value}
+                  variant={attentionFilter === option.value ? "secondary" : "outline"}
+                  className="h-9 rounded-full px-4"
+                  onClick={() => setAttentionFilter(option.value)}
+                >
+                  {option.label}
+                  <span className="ml-2 rounded-full bg-background/70 px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                    {count}
+                  </span>
+                </Button>
+              );
+            })}
+          </div>
+          {selectionMode ? (
+            <div className="border-border/60 bg-background/80 flex flex-col gap-5 rounded-xl border p-4 shadow-sm dark:bg-background/60">
+              <div className="flex flex-col gap-1">
+                <p className="text-sm font-semibold text-foreground">
+                  {selectedCount} device{selectedCount === 1 ? "" : "s"} selected
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  Update alert thresholds or create supply orders for every selected device in one place.
+                </p>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="border-border/60 bg-card/60 flex flex-col gap-4 rounded-lg border p-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">Alert settings</h3>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      Adjust toner thresholds and warning behaviour across the selected devices.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {COLOR_INPUTS.map(({ key, label }) => (
+                      <label
+                        key={key}
+                        className="flex flex-col text-xs font-medium uppercase text-muted-foreground"
+                      >
+                        {label} threshold (%)
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={bulkThresholds[key]}
+                          onChange={(event) => {
+                            const nextValue = Number.parseInt(event.target.value, 10);
+                            const clamped = Number.isNaN(nextValue)
+                              ? 0
+                              : Math.min(Math.max(nextValue, 0), 100);
+                            updateThresholdValue(key, clamped);
+                          }}
+                          className="mt-1 h-10 rounded-lg border-border bg-card"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <label className="flex flex-col text-xs font-medium uppercase text-muted-foreground lg:w-full">
+                    Warning behaviour
+                    <select
+                      value={warningAction}
+                      onChange={(event) =>
+                        setWarningAction(event.target.value as "none" | "mute" | "unmute")
+                      }
+                      className="mt-1 h-10 rounded-lg border border-border bg-card px-3 text-sm"
+                    >
+                      <option value="none">Leave as-is</option>
+                      <option value="mute">Mute warnings</option>
+                      <option value="unmute">Enable warnings</option>
+                    </select>
+                  </label>
+                  <Button
+                    onClick={applyBulkChanges}
+                    disabled={!hasSelection || isBulkBusy}
+                    className="rounded-full px-5"
+                  >
+                    {bulkLoading ? "Applying..." : "Apply changes"}
+                  </Button>
+                </div>
+                <div className="border-border/60 bg-card/60 flex flex-col gap-4 rounded-lg border p-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground">Supply orders</h3>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      Create identical supply orders for each eligible device in your selection.
+                    </p>
+                  </div>
+                  <label className="flex flex-col text-xs font-medium uppercase text-muted-foreground">
+                    Supply type
+                    <select
+                      value={bulkOrderScope}
+                      onChange={(event) =>
+                        setBulkOrderScope(event.target.value as SupplyScope)
+                      }
+                      className="mt-1 h-10 rounded-lg border border-border bg-card px-3 text-sm"
+                    >
+                      {ORDER_SCOPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p>
+                      {bulkOrderAnalysis.eligible.length} device
+                      {bulkOrderAnalysis.eligible.length === 1 ? " is" : "s are"} ready for{" "}
+                      {ORDER_SCOPE_LABEL[bulkOrderScope].toLowerCase()} orders.
+                    </p>
+                    {bulkOrderAnalysis.conflictCount > 0 ? (
+                      <p className="text-amber-600">
+                        {bulkOrderAnalysis.conflictCount} already have an open order for this supply and will be skipped.
+                      </p>
+                    ) : null}
+                    {bulkOrderAnalysis.missingCount > 0 ? (
+                      <p className="text-amber-600">
+                        {bulkOrderAnalysis.missingCount} cannot be processed without a serial number.
+                      </p>
+                    ) : null}
+                  </div>
+                  <Button
+                    onClick={handleBulkOrderCreate}
+                    disabled={
+                      !hasSelection || isBulkBusy || bulkOrderAnalysis.eligible.length === 0
+                    }
+                    className="rounded-full px-5"
+                  >
+                    {bulkOrderLoading
+                      ? "Creating..."
+                      : `Create ${ORDER_SCOPE_LABEL[bulkOrderScope].toLowerCase()} orders`}
+                  </Button>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="ghost"
+                  onClick={clearSelection}
+                  disabled={!hasSelection || isBulkBusy}
+                  className="rounded-full"
+                >
+                  Clear selection
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {filteredDevices.length === 0 ? (
+            <div className="border-border/70 bg-muted/40 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed py-16 text-center">
+              <h2 className="text-foreground text-lg font-semibold">
+                No devices match your filters
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Try adjusting the status filter or clearing the search query.
+              </p>
+            </div>
+          ) : selectionMode ? (
+            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+              <div className="max-h-[60vh] overflow-y-auto">
+                <table className="min-w-full divide-y divide-border/60 text-sm">
+                  <thead className="bg-muted/40 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="w-12 px-4 py-3 text-left">
+                      <span className="sr-only">Select device</span>
+                    </th>
+                    <th className="px-4 py-3 text-left">Serial</th>
+                    <th className="px-4 py-3 text-left">Customer</th>
+                    <th className="px-4 py-3 text-left">Model</th>
+                    <th className="px-4 py-3 text-left">Location</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filteredDevices.map((entry, index) => {
+                    const serial = entry.device.serial_number ?? "";
+                    const rowKey = serial || entry.device.device_id || String(index);
+                    const selectionDisabled = !serial || !entry.device.device_id;
+                    const isSelected = Boolean(serial && selectedDevices[serial]);
+
+                    const handleRowToggle = () => {
+                      if (selectionDisabled) return;
+                      handleToggleDeviceSelection(entry.device, !isSelected);
+                    };
+
+                    return (
+                      <tr
+                        key={rowKey}
+                        onClick={handleRowToggle}
+                        className={cn(
+                          "border-l-2 border-transparent transition-colors",
+                          selectionDisabled ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:bg-muted/40",
+                          isSelected && "border-primary bg-primary/5"
+                        )}
+                      >
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                            checked={isSelected}
+                            disabled={selectionDisabled}
+                            onChange={(event) => {
+                              event.stopPropagation();
+                              if (selectionDisabled) return;
+                              handleToggleDeviceSelection(entry.device, event.target.checked);
+                            }}
+                          />
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                          {serial || "Unknown"}
+                        </td>
+                        <td className="px-4 py-3">
+                          {entry.device.customer ?? "Unassigned"}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {entry.device.model ?? "Unknown model"}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {entry.device.device_location ?? "Unknown location"}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {serial ? (
+                            <Link
+                              href={`/devices/${encodeURIComponent(serial)}`}
+                              className="text-primary text-xs font-medium hover:underline"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              View
+                            </Link>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          ) : useVirtual ? (
+            <div
+              ref={parentRef}
+              className="overflow-y-auto pr-2"
+              style={{ height: "calc(100vh - 260px)", minHeight: "420px" }}
+            >
+              <div
+                style={{
+                  height: rowVirtualizer.getTotalSize(),
+                  position: "relative",
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const rowStart = virtualRow.index * activeColumns;
+                  const rowItems: ReactNode[] = [];
+
+                  for (let offset = 0; offset < activeColumns; offset++) {
+                    const entry = filteredDevices[rowStart + offset];
+                    if (!entry) {
+                      break;
+                    }
+
+                    const serial = entry.device.serial_number ?? "";
+                    const cardKey =
+                      serial || entry.device.device_id || `${rowStart + offset}`;
+                    const dismissing = pendingDismiss === serial;
+                    const ordering = pendingOrder?.startsWith(`${serial}-`) ?? false;
+                    const deviceTarget =
+                      entry.device.serial_number ?? entry.device.device_id ?? null;
+                    const isSelected =
+                      selectionMode && !!serial && Boolean(selectedDevices[serial]);
+                    const selectionDisabled = !serial;
+                    const toggleSelection =
+                      selectionMode && !selectionDisabled
+                        ? (nextSelected: boolean) =>
+                            handleToggleDeviceSelection(entry.device, nextSelected)
+                        : undefined;
+
+                    rowItems.push(
+                      <DeviceCard
+                        key={cardKey}
+                        className="h-full"
+                        model={entry.device.model}
+                        serialNumber={serial || "Unknown"}
+                        customer={entry.device.customer}
+                        location={entry.device.device_location}
+                        tonerLevels={entry.tonerLevels}
+                        lastUpdatedLabel={entry.lastUpdatedLabel}
+                        hasActiveOrder={!!serial && activeOrderSet.has(serial)}
+                        statusMeta={entry.statusMeta}
+                        mutedScopes={entry.mutedScopes}
+                        dismissLoading={dismissing}
+                        orderPending={ordering}
+                        onDismissWarnings={
+                          !selectionMode && entry.canDismiss
+                            ? () => handleDismissWarnings(entry.device)
+                            : undefined
+                        }
+                        onRestoreWarnings={
+                          !selectionMode && entry.canRestore
+                            ? () => handleRestoreWarnings(entry.device)
+                            : undefined
+                        }
+                        onCreateSupplyOrder={
+                          !selectionMode && entry.device.serial_number
+                            ? (scope) => handleCreateSupplyOrder(entry.device, scope)
+                            : undefined
+                        }
+                        onSelect={
+                          !selectionMode && deviceTarget
+                            ? () =>
+                                router.push(
+                                  `/devices/${encodeURIComponent(deviceTarget)}`
+                                )
+                            : undefined
+                        }
+                        selectionMode={selectionMode}
+                        selected={isSelected}
+                        selectionDisabled={selectionDisabled}
+                        onToggleSelect={toggleSelection}
+                      />
+                    );
+                  }
+
+                  if (rowItems.length === 0) {
+                    return null;
+                  }
+
+                  return (
+                    <div
+                      key={virtualRow.key}
+                      ref={measureRow}
+                      className="absolute right-0 left-0 px-1 pb-6"
+                      style={{
+                        transform: `translateY(${virtualRow.start}px)`,
+                        height: virtualRow.size,
+                      }}
+                    >
+                      <div
+                        className="grid gap-6"
+                        style={{
+                          gridTemplateColumns: `repeat(${activeColumns}, minmax(0, 1fr))`,
+                        }}
+                      >
+                        {rowItems}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div
+              className={cn(
+                "grid gap-6",
+                activeColumns === 1 ? "grid-cols-1" : "md:grid-cols-2 xl:grid-cols-3"
+              )}
+            >
+              {filteredDevices.map((entry, index) => {
+                const serial = entry.device.serial_number ?? "";
+                const cardKey = serial || entry.device.device_id || String(index);
+                const dismissing = pendingDismiss === serial;
+                const ordering = pendingOrder?.startsWith(`${serial}-`) ?? false;
+                const deviceTarget =
+                  entry.device.serial_number ?? entry.device.device_id ?? null;
+                const isSelected =
+                  selectionMode && !!serial && Boolean(selectedDevices[serial]);
+                const selectionDisabled = !serial;
+                const toggleSelection =
+                  selectionMode && !selectionDisabled
+                    ? (nextSelected: boolean) =>
+                        handleToggleDeviceSelection(entry.device, nextSelected)
+                    : undefined;
+
+                return (
+                  <DeviceCard
+                    key={cardKey}
+                    className="h-full"
+                    model={entry.device.model}
+                    serialNumber={serial || "Unknown"}
+                    customer={entry.device.customer}
+                    location={entry.device.device_location}
+                    tonerLevels={entry.tonerLevels}
+                    lastUpdatedLabel={entry.lastUpdatedLabel}
+                    hasActiveOrder={!!serial && activeOrderSet.has(serial)}
+                    statusMeta={entry.statusMeta}
+                    mutedScopes={entry.mutedScopes}
+                    dismissLoading={dismissing}
+                    orderPending={ordering}
+                    onDismissWarnings={
+                      !selectionMode && entry.canDismiss
+                        ? () => handleDismissWarnings(entry.device)
+                        : undefined
+                    }
+                    onRestoreWarnings={
+                      !selectionMode && entry.canRestore
+                        ? () => handleRestoreWarnings(entry.device)
+                        : undefined
+                    }
+                    onCreateSupplyOrder={
+                      !selectionMode && entry.device.serial_number
+                        ? (scope) => handleCreateSupplyOrder(entry.device, scope)
+                        : undefined
+                    }
+                    onSelect={
+                      !selectionMode && deviceTarget
+                        ? () =>
+                            router.push(`/devices/${encodeURIComponent(deviceTarget)}`)
+                        : undefined
+                    }
+                    selectionMode={selectionMode}
+                    selected={isSelected}
+                    selectionDisabled={selectionDisabled}
+                    onToggleSelect={toggleSelection}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
-
 }
 
-function DeviceRow({ view, density }: { view: DeviceView; density: Density }) {
-  const { device, tonerValues, wasteValue, wasteWarning, warnings, status, issueCount, lowCount } = view;
-  const statusMeta = STATUS_META[status];
-  const totalIssues = issueCount + lowCount;
+type StatusCardProps = {
+  label: string;
+  value: number;
+  tone: string;
+  active: boolean;
+  onClick: () => void;
+};
 
+function StatusCard({ label, value, tone, active, onClick }: StatusCardProps) {
   return (
-    <div className={cn("transition hover:bg-muted/40", DENSITY_ROW[density], "px-4")}
-    >
-      <div className="flex flex-wrap items-center gap-3">
-        <input type="checkbox" className="h-4 w-4 rounded border-border" aria-label={`Select ${device.serial_number}`} />
-        <span className={cn("h-2.5 w-2.5 rounded-full", statusMeta.dot)} />
-        <div className="flex min-w-[160px] flex-col gap-0">
-          <span className="text-sm font-semibold text-foreground">
-            {device.customer_name ?? "Unassigned"}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {device.location ?? "No location"}
-          </span>
-        </div>
-        <Badge className={cn("text-[10px] font-semibold", statusMeta.badgeClass)}>
-          {statusMeta.summary} · {totalIssues} issue{totalIssues === 1 ? "" : "s"}
-        </Badge>
-        <div className="flex flex-1 flex-wrap items-center gap-2">
-          {tonerValues.map(({ key, label, color, value }) => (
-            <TonerBar key={key} label={label} value={value} density={density} color={color} />
-          ))}
-        </div>
-        <WasteIndicator value={wasteValue} warning={wasteWarning} density={density} />
-        <WarningsSummary warnings={warnings} status={status} totalIssues={totalIssues} />
-      </div>
-      <div className="flex flex-wrap items-center gap-3 pl-8 text-xs text-muted-foreground">
-        <span>SN: {device.serial_number}</span>
-        <span>• Updated {formatRelativeTime(device.last_updated_at ?? device.updated_at)}</span>
-        <span className="flex items-center gap-2 text-sm text-foreground">
-          <span className="inline-flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> {formatShortCount(device.counter_total)}</span>
-          <span className="inline-flex items-center gap-1"><Palette className="h-3.5 w-3.5" /> {formatShortCount(device.counter_color)}</span>
-          <span className="inline-flex items-center gap-1"><Printer className="h-3.5 w-3.5" /> {formatShortCount(device.counter_mono)}</span>
-        </span>
-        <div className="ml-auto flex items-center gap-2">
-          <Button asChild variant="outline" size="sm" className="gap-1">
-            <Link href={`/devices/${encodeURIComponent(device.serial_number)}`}>
-              <Eye className="h-3.5 w-3.5" /> View
-            </Link>
-          </Button>
-          <Button asChild variant="ghost" size="sm" className="gap-1">
-            <Link href={`/devices/${encodeURIComponent(device.serial_number)}/settings`}>
-              <Settings className="h-3.5 w-3.5" /> Settings
-            </Link>
-          </Button>
-          <Button variant="secondary" size="sm" className="gap-1">
-            <FileText className="h-3.5 w-3.5" /> Order
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function WasteIndicator({ value, warning, density }: { value: number | null; warning: string | null; density: Density }) {
-  const badgeClass = warning
-    ? "bg-destructive/10 text-destructive"
-    : value !== null && value >= 80
-    ? "bg-amber-100 text-amber-700"
-    : "bg-neutral-100 text-neutral-600";
-
-  return (
-    <div className="flex items-center gap-2">
-      <TonerBar label="Waste" value={value} density={density} color="#6B7280" />
-      {value !== null ? (
-        <Badge className={cn("text-[10px]", badgeClass)}>Waste {Math.round(value)}%</Badge>
-      ) : (
-        <Badge variant="outline" className="text-[10px] text-muted-foreground">
-          Waste --
-        </Badge>
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "border-border/70 bg-background/80 focus-visible:ring-primary/40 flex flex-col gap-2 rounded-2xl border p-5 text-left shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-md focus-visible:ring-2 focus-visible:outline-none",
+        active && "border-primary/40 shadow-md"
       )}
-    </div>
+    >
+      <span className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        {label}
+      </span>
+      <span className={cn("text-3xl font-semibold", tone)}>{value.toLocaleString()}</span>
+    </button>
   );
 }
 
-function WarningsSummary({ warnings, status, totalIssues }: { warnings: string[]; status: DeviceStatus; totalIssues: number }) {
-  const statusMeta = STATUS_META[status];
-
-  if (totalIssues === 0) {
-    return <Badge variant="outline" className="text-[10px] text-muted-foreground">No issues</Badge>;
-  }
-
-  return (
-    <div className="flex flex-col gap-1">
-      <Badge className={cn("w-fit text-[10px]", statusMeta.badgeClass)}>
-        {statusMeta.summary} · {totalIssues}
-      </Badge>
-      <div className="flex flex-wrap gap-1.5">
-        {warnings.slice(0, 2).map((warning) => {
-          const variant = WARNING_VARIANTS.find((entry) => entry.match.test(warning));
-          return (
-            <Badge key={warning} className={cn("text-[10px]", variant?.className ?? "bg-neutral-200 text-neutral-700")}> 
-              {warning}
-            </Badge>
-          );
-        })}
-        {warnings.length > 2 ? (
-          <Badge variant="outline" className="text-[10px] text-muted-foreground">+{warnings.length - 2}</Badge>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function SegmentedControl<T extends string>({ options, value, onChange }: { options: Array<{ value: T; label: string }>; value: T; onChange: (value: T) => void }) {
-  return (
-    <div className="flex items-center gap-1 rounded-full border border-border bg-card p-1 shadow-sm">
-      {options.map((option) => (
-        <Button
-          key={option.value}
-          type="button"
-          variant={value === option.value ? "default" : "ghost"}
-          size="sm"
-          className={cn("rounded-full px-3", value === option.value ? "shadow" : "text-muted-foreground")}
-          onClick={() => onChange(option.value)}
-        >
-          {option.label}
-        </Button>
-      ))}
-    </div>
-  );
-}
-
-function SummaryCard({ label, value, tone }: { label: string; value: number; tone?: "destructive" | "warning" | "success" }) {
-  const toneClass =
-    tone === "destructive"
-      ? "text-destructive"
-      : tone === "warning"
-      ? "text-amber-600"
-      : tone === "success"
-      ? "text-emerald-600"
-      : "text-foreground";
-
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className={cn("text-2xl font-semibold", toneClass)}>{value}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function normalizeDevices(devices: DeviceRow[]) {
-  const map = new Map<string, DeviceRow>();
-  for (const device of devices) {
-    map.set(device.serial_number, device);
-  }
-  return Array.from(map.values()).sort((a, b) => {
-    const nameA = a.customer_name ?? "";
-    const nameB = b.customer_name ?? "";
-    return nameA.localeCompare(nameB);
-  });
-}
-
-function extractWarnings(raw: string | null | undefined) {
-  return (raw ?? "")
-    .split(/\s*(?:\u2022|\||\n|;)+\s*/g)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
-function sanitizeValue(raw: unknown): number | null {
-  if (typeof raw === "number") {
-    return raw;
-  }
-  if (typeof raw === "string") {
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function hasLowToner(device: DeviceRow) {
-  return TONER_CONFIG.some(({ key }) => {
-    const value = sanitizeValue(device[TONER_FIELD_MAP[key]]);
-    return typeof value === "number" && value > 0 && value < 20;
-  });
-}
 
 
-function formatShortCount(value: number | null | undefined) {
-  if (typeof value !== "number") {
-    return "--";
-  }
-  if (Math.abs(value) >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`;
-  }
-  if (Math.abs(value) >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}K`;
-  }
-  return value.toLocaleString();
-}
+
+
+
+
+
+
+
+
+
