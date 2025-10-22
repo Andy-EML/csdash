@@ -28,7 +28,6 @@ import {
 } from "./device-dashboard-helpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -208,6 +207,7 @@ export function DevicesDashboard({
 
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const parentRef = useRef<HTMLDivElement | null>(null);
+  const headerSelectAllRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const updateColumns = () => {
@@ -783,9 +783,6 @@ export function DevicesDashboard({
     [customerFilteredDevices]
   );
 
-  const totalVisible = customerFilteredDevices.length;
-
-
   const hiddenManualCount = useMemo(() => {
     if (automationFilter !== "auto") {
       return 0;
@@ -831,9 +828,7 @@ export function DevicesDashboard({
     customerFilter,
     deferredSearchQuery,
   ]);
-  const filteredDevices = useMemo(() => {
-    const term = deferredSearchQuery.trim().toLowerCase();
-
+  const filteredBeforeSearch = useMemo(() => {
     return customerFilteredDevices
       .filter((entry) => {
         if (attentionFilter === "needs_attention" && !entry.needsAttention) {
@@ -848,22 +843,7 @@ export function DevicesDashboard({
         if (customerFilter !== "all" && entry.customerLabel !== customerFilter) {
           return false;
         }
-
-        if (!term) {
-          return true;
-        }
-
-        const haystack = [
-          entry.customerLabel,
-          entry.device.model ?? "",
-          entry.device.serial_number ?? "",
-          entry.device.device_id ?? "",
-          entry.device.device_location ?? "",
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        return haystack.includes(term);
+        return true;
       })
       .sort((a, b) => {
         const byStatus = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
@@ -873,13 +853,102 @@ export function DevicesDashboard({
         const nameB = b.customerLabel;
         return nameA.localeCompare(nameB);
       });
-  }, [
-    customerFilteredDevices,
-    deferredSearchQuery,
-    statusFilter,
-    attentionFilter,
-    customerFilter,
-  ]);
+  }, [customerFilteredDevices, attentionFilter, statusFilter, customerFilter]);
+
+  const totalMatched = filteredBeforeSearch.length;
+
+  const filteredDevices = useMemo(() => {
+    const term = deferredSearchQuery.trim().toLowerCase();
+    if (!term) {
+      return filteredBeforeSearch;
+    }
+
+    return filteredBeforeSearch.filter((entry) => {
+      const haystack = [
+        entry.customerLabel,
+        entry.device.model ?? "",
+        entry.device.serial_number ?? "",
+        entry.device.device_id ?? "",
+        entry.device.device_location ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(term);
+    });
+  }, [filteredBeforeSearch, deferredSearchQuery]);
+
+  const selectableFilteredDevices = useMemo(() => {
+    return filteredDevices.filter((entry) => {
+      const serial = (entry.device.serial_number ?? "").trim();
+      const normalizedDeviceId =
+        typeof entry.device.device_id === "string"
+          ? entry.device.device_id.trim()
+          : "";
+      return serial !== "" && normalizedDeviceId !== "";
+    });
+  }, [filteredDevices]);
+
+  const filteredSelectedCount = useMemo(() => {
+    return selectableFilteredDevices.reduce((total, entry) => {
+      const serial = (entry.device.serial_number ?? "").trim();
+      if (!serial) {
+        return total;
+      }
+      return total + (selectedDevices[serial] ? 1 : 0);
+    }, 0);
+  }, [selectableFilteredDevices, selectedDevices]);
+
+  const allFilteredSelected =
+    selectableFilteredDevices.length > 0 &&
+    filteredSelectedCount === selectableFilteredDevices.length;
+  const someFilteredSelected =
+    filteredSelectedCount > 0 && !allFilteredSelected;
+
+  const handleToggleAllFilteredSelection = useCallback(
+    (checked: boolean) => {
+      setSelectedDevices((previous) => {
+        if (selectableFilteredDevices.length === 0) {
+          return previous;
+        }
+
+        const next = { ...previous };
+        if (checked) {
+          selectableFilteredDevices.forEach((entry) => {
+            const serial = (entry.device.serial_number ?? "").trim();
+            if (!serial) {
+              return;
+            }
+            const normalizedDeviceId =
+              typeof entry.device.device_id === "string"
+                ? entry.device.device_id.trim()
+                : "";
+            if (!normalizedDeviceId && !serial) {
+              return;
+            }
+            next[serial] = {
+              deviceId: normalizedDeviceId || serial,
+            };
+          });
+        } else {
+          selectableFilteredDevices.forEach((entry) => {
+            const serial = (entry.device.serial_number ?? "").trim();
+            if (serial) {
+              delete next[serial];
+            }
+          });
+        }
+        return next;
+      });
+    },
+    [selectableFilteredDevices]
+  );
+
+  useEffect(() => {
+    if (headerSelectAllRef.current) {
+      headerSelectAllRef.current.indeterminate = someFilteredSelected;
+    }
+  }, [someFilteredSelected, allFilteredSelected]);
 
   const filterLabel =
     statusFilter === "all" ? "All devices" : STATUS_META[statusFilter].label;
@@ -1128,18 +1197,34 @@ export function DevicesDashboard({
           />
         </section>
 
-        <section className="border-border/60 bg-card/70 flex flex-col gap-4 rounded-2xl border p-6 shadow-sm backdrop-blur">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-            <div className="relative flex-1">
-              <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-              <Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search by customer, model, serial, or device ID..."
-                className="border-border h-11 rounded-xl bg-transparent pl-10"
-              />
+        <section className="border-border/60 bg-card/70 flex flex-col gap-4 rounded-2xl border p-5 shadow-sm backdrop-blur">
+          <div className="flex flex-col gap-4">
+            <div className="flex w-full flex-wrap items-center justify-between gap-3 sm:flex-nowrap">
+              <div className="relative flex-1">
+                <Search className="text-muted-foreground pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2" />
+                <Input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search by customer, model, serial, or device ID..."
+                  aria-label="Search devices"
+                  className="border-border h-12 w-full rounded-2xl bg-background/80 pl-12 pr-4 text-base shadow-sm transition focus-visible:ring-primary/30 dark:bg-background"
+                />
+              </div>
+              <select
+                value={customerFilter}
+                onChange={(event) => setCustomerFilter(event.target.value)}
+                className="h-12 min-w-[200px] rounded-xl border border-border bg-background px-4 text-sm text-foreground shadow-sm transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:bg-background/80"
+                aria-label="Filter by customer"
+              >
+                <option value="all">All customers</option>
+                {customerOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+            <div className="flex min-h-12 w-full flex-wrap items-center justify-between gap-3 md:flex-nowrap">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="h-11 gap-2 rounded-xl">
@@ -1163,19 +1248,6 @@ export function DevicesDashboard({
                 </DropdownMenuContent>
               </DropdownMenu>
               <select
-                value={customerFilter}
-                onChange={(event) => setCustomerFilter(event.target.value)}
-                className="h-11 min-w-[180px] rounded-xl border border-border bg-background px-4 text-sm text-foreground shadow-sm transition focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:bg-background/80"
-                aria-label="Filter by customer"
-              >
-                <option value="all">All customers</option>
-                {customerOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-              <select
                 value={automationFilter}
                 onChange={(event) =>
                   setAutomationFilter(event.target.value as "auto" | "all" | "manual")
@@ -1194,18 +1266,22 @@ export function DevicesDashboard({
               >
                 {selectionMode ? "Close bulk actions" : "Bulk actions"}
               </Button>
-              <Badge variant="outline" className="w-fit rounded-full px-4 py-1">
-                Showing {filteredDevices.length} of {totalVisible} devices
-              </Badge>
               {hiddenManualCount > 0 ? (
-                <Badge variant="secondary" className="w-fit rounded-full px-4 py-1 text-xs">
+                <span className="rounded-full bg-muted px-4 py-1 text-xs leading-relaxed text-foreground">
                   Hiding {hiddenManualCount} manual-order device
                   {hiddenManualCount === 1 ? "" : "s"}
-                </Badge>
-              ) : null}
+                </span>
+              ) : (
+                <span className="rounded-full bg-muted/30 px-4 py-1 text-xs leading-relaxed text-muted-foreground">
+                  No manual-order devices hidden
+                </span>
+              )}
+              <span className="rounded-full bg-background px-4 py-1 text-sm leading-relaxed text-foreground">
+                Showing {filteredDevices.length} of {totalMatched} devices
+              </span>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             {ATTENTION_FILTER_OPTIONS.map((option) => {
               const count = attentionCountByFilter[option.value];
               return (
@@ -1387,7 +1463,21 @@ export function DevicesDashboard({
                   <thead className="bg-muted/40 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="w-12 px-4 py-3 text-left">
-                      <span className="sr-only">Select device</span>
+                      <label className="sr-only" htmlFor="select-all-devices">
+                        Select all devices
+                      </label>
+                      <input
+                        id="select-all-devices"
+                        ref={headerSelectAllRef}
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                        checked={allFilteredSelected}
+                        disabled={selectableFilteredDevices.length === 0}
+                        onChange={(event) =>
+                          handleToggleAllFilteredSelection(event.target.checked)
+                        }
+                        onClick={(event) => event.stopPropagation()}
+                      />
                     </th>
                     <th className="px-4 py-3 text-left">Serial</th>
                     <th className="px-4 py-3 text-left">Customer</th>
