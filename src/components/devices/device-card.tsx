@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HighlightBadge } from "@/components/ui/highlight-badge";
 import { cn } from "@/lib/utils";
 import {
   MapPin,
@@ -58,6 +59,7 @@ export type DeviceCardProps = {
   customer: string | null;
   location: string | null;
   tonerLevels: TonerSnapshot[];
+  wasteTonerPercent?: number | null;
   lastUpdatedLabel: string;
   hasActiveOrder: boolean;
   statusMeta: DeviceStatusMeta;
@@ -101,12 +103,51 @@ const TONER_STYLES: Record<
   },
 };
 
+type WasteBadge = {
+  className: string;
+  label: string;
+};
+
+const resolveWasteBadge = (value: number | null | undefined): WasteBadge | null => {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return null;
+  }
+  const rounded = Math.round(value);
+
+  if (rounded >= 95) {
+    return {
+      label: `Waste ${rounded}%`,
+      className:
+        "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-100",
+    };
+  }
+
+  if (rounded >= 85) {
+    return {
+      label: `Waste ${rounded}%`,
+      className:
+        "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-100",
+    };
+  }
+
+  if (rounded >= 75) {
+    return {
+      label: `Waste ${rounded}%`,
+      className:
+        "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-100",
+    };
+  }
+
+  return null;
+};
+
 function DeviceCardComponent({
   model,
   serialNumber,
   customer,
   location,
   tonerLevels,
+  wasteTonerPercent,
   lastUpdatedLabel,
   hasActiveOrder,
   statusMeta,
@@ -125,6 +166,7 @@ function DeviceCardComponent({
 }: DeviceCardProps) {
   const [copied, setCopied] = useState(false);
   const copyResetRef = useRef<number | null>(null);
+  const wasteBadge = resolveWasteBadge(wasteTonerPercent);
 
   useEffect(() => {
     return () => {
@@ -308,6 +350,17 @@ function DeviceCardComponent({
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
             </button>
+            {wasteBadge ? (
+              <HighlightBadge
+                icon="waste"
+                className={cn(
+                  "ml-1 shrink-0 border border-transparent",
+                  wasteBadge.className
+                )}
+              >
+                {wasteBadge.label}
+              </HighlightBadge>
+            ) : null}
           </div>
         </div>
 

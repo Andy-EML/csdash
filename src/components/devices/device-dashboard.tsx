@@ -38,6 +38,7 @@ import { IconUpload } from "@/components/ui/icons";
 import { formatRelativeTime, cn } from "@/lib/utils";
 import type {
   DeviceAlertSettingsRow,
+  DeviceRow,
   DeviceWarningOverrideRow,
   GasGageRow,
 } from "@/lib/database.types";
@@ -51,6 +52,7 @@ type StatusFilter = DeviceStatus | "all";
 
 type DevicesDashboardProps = {
   devices: GasGageRow[];
+  deviceSummaries: DeviceRow[];
   alertSettings: DeviceAlertSettingsRow[];
   warningOverrides: DeviceWarningOverrideRow[];
   activeOrderDeviceIds: string[];
@@ -64,6 +66,7 @@ type DevicesDashboardProps = {
   ordersError?: string;
   settingsError?: string;
   overridesError?: string;
+  devicesError?: string;
   renderedAt: number;
 };
 
@@ -80,6 +83,7 @@ type EnrichedDevice = {
   needsAttention: boolean;
   automationEnabled: boolean;
   customerLabel: string;
+  wasteTonerPercent: number | null;
 };
 
 type AttentionFilter = "needs_attention" | "active_orders" | "all";
@@ -165,6 +169,7 @@ const ORDER_SCOPE_OPTIONS: Array<{ value: SupplyScope; label: string }> = [
 
 export function DevicesDashboard({
   devices,
+  deviceSummaries,
   alertSettings,
   warningOverrides,
   activeOrderDeviceIds,
@@ -172,6 +177,7 @@ export function DevicesDashboard({
   ordersError,
   settingsError,
   overridesError,
+  devicesError,
   renderedAt,
 }: DevicesDashboardProps) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -230,6 +236,26 @@ export function DevicesDashboard({
     }
     return map;
   }, [devices]);
+
+  const { wasteByDeviceId, wasteBySerial } = useMemo(() => {
+    const byDeviceId = new Map<string, number>();
+    const bySerial = new Map<string, number>();
+
+    for (const summary of deviceSummaries) {
+      const value = summary.waste_toner_percent;
+      if (value === null || Number.isNaN(value)) {
+        continue;
+      }
+      if (summary.device_id) {
+        byDeviceId.set(summary.device_id.trim(), value);
+      }
+      if (summary.serial_number) {
+        bySerial.set(summary.serial_number.trim(), value);
+      }
+    }
+
+    return { wasteByDeviceId: byDeviceId, wasteBySerial: bySerial };
+  }, [deviceSummaries]);
 
   const selectedEntries = useMemo(
     () => Object.entries(selectedDevices),
@@ -690,8 +716,11 @@ export function DevicesDashboard({
       const lastUpdatedIso = getDeviceLastUpdatedIso(device);
       const customerLabel = getCustomerLabel(device.customer);
       const automationEnabled = settings?.alerts_enabled !== false;
+      const wasteFromDeviceId = deviceId ? wasteByDeviceId.get(deviceId) : undefined;
+      const wasteFromSerial = serial ? wasteBySerial.get(serial) : undefined;
+      const wasteTonerPercent = wasteFromDeviceId ?? wasteFromSerial ?? null;
       const hasActiveOrder = combinedOrders.size > 0;
-      const needsAttention =
+      const actionableAlert =
         status !== "ok" &&
         tonerLevels.some((level) => {
           if (level.muted) {
@@ -704,6 +733,7 @@ export function DevicesDashboard({
             (typeof value === "number" && value <= level.threshold);
           return isAlerting && !level.hasActiveOrder;
         });
+      const needsAttention = automationEnabled && actionableAlert;
 
       return {
         device,
@@ -718,9 +748,18 @@ export function DevicesDashboard({
         needsAttention,
         automationEnabled,
         customerLabel,
+        wasteTonerPercent,
       };
     });
-  }, [devices, overridesBySerial, settingsByDevice, renderedAt, ordersByDevice]);
+  }, [
+    devices,
+    overridesBySerial,
+    settingsByDevice,
+    renderedAt,
+    ordersByDevice,
+    wasteByDeviceId,
+    wasteBySerial,
+  ]);
 
   const customerOptions = useMemo(() => {
     const set = new Set<string>();
@@ -1149,7 +1188,7 @@ export function DevicesDashboard({
           </div>
         </header>
 
-        {(ordersError || settingsError || overridesError) && (
+        {(ordersError || settingsError || overridesError || devicesError) && (
           <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50/70 px-5 py-4 text-sm text-amber-900">
             <p className="font-semibold">Heads up</p>
             <ul className="list-inside list-disc space-y-1">
@@ -1161,6 +1200,9 @@ export function DevicesDashboard({
               ) : null}
               {overridesError ? (
                 <li>Warning overrides could not be loaded: {overridesError}</li>
+              ) : null}
+              {devicesError ? (
+                <li>Waste toner levels may be stale: {devicesError}</li>
               ) : null}
             </ul>
           </div>
@@ -1613,6 +1655,7 @@ export function DevicesDashboard({
                         customer={entry.device.customer}
                         location={entry.device.device_location}
                         tonerLevels={entry.tonerLevels}
+                        wasteTonerPercent={entry.wasteTonerPercent}
                         lastUpdatedLabel={entry.lastUpdatedLabel}
                         hasActiveOrder={Boolean(hasActiveOrderForCard)}
                         statusMeta={entry.statusMeta}
@@ -1716,6 +1759,7 @@ export function DevicesDashboard({
                     customer={entry.device.customer}
                     location={entry.device.device_location}
                     tonerLevels={entry.tonerLevels}
+                    wasteTonerPercent={entry.wasteTonerPercent}
                     lastUpdatedLabel={entry.lastUpdatedLabel}
                     hasActiveOrder={Boolean(hasActiveOrderForCard)}
                     statusMeta={entry.statusMeta}

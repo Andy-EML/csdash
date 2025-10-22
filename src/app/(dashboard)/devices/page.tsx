@@ -2,6 +2,7 @@ import { DevicesDashboard } from "@/components/devices/device-dashboard";
 import { getSupabaseServiceClient } from "@/lib/supabase/service";
 import type {
   DeviceAlertSettingsRow,
+  DeviceRow,
   DeviceWarningOverrideRow,
   GasGageRow,
 } from "@/lib/database.types";
@@ -16,6 +17,7 @@ export default async function DevicesPage() {
     { data: activeOrders, error: ordersError },
     { data: alertSettings, error: settingsError },
     { data: warningOverrides, error: overridesError },
+    { data: deviceSummaries, error: devicesError },
   ] = await Promise.all([
     supabase.from("Gas_Gage").select("*").order("customer", { ascending: true }),
     supabase
@@ -24,6 +26,9 @@ export default async function DevicesPage() {
       .eq("status", "open"),
     supabase.from("device_alert_settings").select("*"),
     supabase.from("device_warning_overrides").select("*"),
+    supabase
+      .from("devices")
+      .select("serial_number, device_id, waste_toner_percent"),
   ]);
 
   if (gasGageError) {
@@ -52,10 +57,12 @@ export default async function DevicesPage() {
       alertSettings={(alertSettings ?? []) as DeviceAlertSettingsRow[]}
       activeOrderDeviceIds={activeDeviceIds}
       activeOrders={activeOrders ?? []}
+      deviceSummaries={(deviceSummaries ?? []) as DeviceRow[]}
       ordersError={ordersError?.message}
       settingsError={settingsError?.message}
       warningOverrides={(warningOverrides ?? []) as DeviceWarningOverrideRow[]}
       overridesError={overridesError?.message}
+      devicesError={devicesError?.message}
       renderedAt={Date.now()}
     />
   );
