@@ -162,7 +162,11 @@ CREATE OR REPLACE FUNCTION should_auto_complete_order(
   old_level integer,
   new_level integer,
   threshold integer DEFAULT 70
-) RETURNS boolean AS $$
+) RETURNS boolean
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path = public, pg_temp
+AS $$
 BEGIN
   -- Null checks
   IF old_level IS NULL OR new_level IS NULL THEN
@@ -176,7 +180,7 @@ BEGIN
   
   RETURN false;
 END;
-$$ LANGUAGE plpgsql IMMUTABLE;
+$$;
 
 COMMENT ON FUNCTION should_auto_complete_order IS 'Determines if toner level increase is significant enough to auto-complete an order';
 
