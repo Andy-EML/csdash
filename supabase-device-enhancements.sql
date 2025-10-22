@@ -333,3 +333,13 @@ CREATE POLICY "Allow authenticated access to import_jobs"
   FOR ALL
   USING (auth.role() = 'authenticated')
   WITH CHECK (auth.role() = 'authenticated');
+
+ALTER TABLE IF EXISTS public."Warning_History" ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow service role access to Warning_History" ON public."Warning_History";
+
+CREATE POLICY "Allow service role access to Warning_History"
+  ON public."Warning_History"
+  FOR ALL
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');
