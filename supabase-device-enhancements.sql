@@ -255,7 +255,8 @@ CREATE INDEX IF NOT EXISTS idx_import_jobs_imported_at
 
 DROP VIEW IF EXISTS public.device_status;
 DROP VIEW IF EXISTS public.device_current_toner CASCADE;
-CREATE VIEW public.device_current_toner AS
+CREATE VIEW public.device_current_toner
+WITH (security_invoker = true) AS
 SELECT DISTINCT ON (device_id)
   device_id,
   serial_number,
@@ -269,7 +270,8 @@ SELECT DISTINCT ON (device_id)
 FROM public.device_toner_snapshots
 ORDER BY device_id, captured_at DESC;
 
-CREATE VIEW public.device_status AS
+CREATE VIEW public.device_status
+WITH (security_invoker = true) AS
 SELECT
   d.device_id,
   d.serial_number,
@@ -289,3 +291,45 @@ FROM public.devices d;
 
 COMMENT ON VIEW public.device_current_toner IS 'Latest toner snapshot per device for dashboard widgets.';
 COMMENT ON VIEW public.device_status IS 'Device status summary including offline detection based on last_seen_at.';
+
+ALTER TABLE IF EXISTS public.device_toner_snapshots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.device_meter_readings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.device_warning_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.device_consumable_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.import_jobs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow authenticated access to device_toner_snapshots" ON public.device_toner_snapshots;
+DROP POLICY IF EXISTS "Allow authenticated access to device_meter_readings" ON public.device_meter_readings;
+DROP POLICY IF EXISTS "Allow authenticated access to device_warning_events" ON public.device_warning_events;
+DROP POLICY IF EXISTS "Allow authenticated access to device_consumable_events" ON public.device_consumable_events;
+DROP POLICY IF EXISTS "Allow authenticated access to import_jobs" ON public.import_jobs;
+
+CREATE POLICY "Allow authenticated access to device_toner_snapshots"
+  ON public.device_toner_snapshots
+  FOR ALL
+  USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to device_meter_readings"
+  ON public.device_meter_readings
+  FOR ALL
+  USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to device_warning_events"
+  ON public.device_warning_events
+  FOR ALL
+  USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to device_consumable_events"
+  ON public.device_consumable_events
+  FOR ALL
+  USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated access to import_jobs"
+  ON public.import_jobs
+  FOR ALL
+  USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');

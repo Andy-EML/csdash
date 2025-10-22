@@ -85,7 +85,8 @@ COMMENT ON TABLE order_lifecycle_events IS 'Tracks complete order history includ
 -- ============================================
 
 -- Create a view to easily identify offline devices
-CREATE OR REPLACE VIEW devices_with_status AS
+CREATE OR REPLACE VIEW devices_with_status
+WITH (security_invoker = true) AS
 SELECT 
   g.*,
   s.alerts_enabled,
@@ -104,6 +105,53 @@ FROM "Gas_Gage" g
 LEFT JOIN device_alert_settings s ON g.device_id = s.device_id;
 
 COMMENT ON VIEW devices_with_status IS 'Enriched device data with connection status and alert settings';
+
+ALTER TABLE IF EXISTS public.device_connection_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.order_lifecycle_events ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow authenticated select on device_connection_events" ON public.device_connection_events;
+DROP POLICY IF EXISTS "Allow authenticated insert on device_connection_events" ON public.device_connection_events;
+DROP POLICY IF EXISTS "Allow authenticated update on device_connection_events" ON public.device_connection_events;
+DROP POLICY IF EXISTS "Allow authenticated delete on device_connection_events" ON public.device_connection_events;
+
+DROP POLICY IF EXISTS "Allow authenticated select on order_lifecycle_events" ON public.order_lifecycle_events;
+DROP POLICY IF EXISTS "Allow authenticated insert on order_lifecycle_events" ON public.order_lifecycle_events;
+DROP POLICY IF EXISTS "Allow authenticated update on order_lifecycle_events" ON public.order_lifecycle_events;
+DROP POLICY IF EXISTS "Allow authenticated delete on order_lifecycle_events" ON public.order_lifecycle_events;
+
+CREATE POLICY "Allow authenticated select on device_connection_events"
+  ON public.device_connection_events FOR SELECT
+  USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated insert on device_connection_events"
+  ON public.device_connection_events FOR INSERT
+  WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated update on device_connection_events"
+  ON public.device_connection_events FOR UPDATE
+  USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated delete on device_connection_events"
+  ON public.device_connection_events FOR DELETE
+  USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated select on order_lifecycle_events"
+  ON public.order_lifecycle_events FOR SELECT
+  USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated insert on order_lifecycle_events"
+  ON public.order_lifecycle_events FOR INSERT
+  WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated update on order_lifecycle_events"
+  ON public.order_lifecycle_events FOR UPDATE
+  USING (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated delete on order_lifecycle_events"
+  ON public.order_lifecycle_events FOR DELETE
+  USING (auth.role() = 'authenticated');
 
 -- ============================================
 -- 5. Add helper function for order auto-completion
